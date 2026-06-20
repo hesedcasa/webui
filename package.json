@@ -9,7 +9,7 @@
   "bugs": "https://github.com/hesedcasa/webui/issues",
   "dependencies": {
     "@oclif/core": ">=4",
-    "next": "^15.5.0",
+    "next": "^16.2.9",
     "next-themes": "^0.4.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
