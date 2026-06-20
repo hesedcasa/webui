@@ -73,10 +73,11 @@
   "repository": "hesedcasa/webui",
   "scripts": {
     "build": "shx rm -rf dist tsconfig.tsbuildinfo && tsc -b",
+    "build:web": "next build web",
     "lint": "eslint",
     "postpack": "shx rm -f oclif.manifest.json",
     "posttest": "npm run lint",
-    "prepack": "oclif manifest && oclif readme",
+    "prepack": "npm run build:web && npm run build && oclif manifest && oclif readme",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
     "test:coverage": "c8 npm test",
     "test:coverage:report": "c8 --reporter=html --reporter=text npm test",
