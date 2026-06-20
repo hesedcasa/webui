@@ -1,19 +1,15 @@
-import {dirname, join} from 'node:path'
+import {dirname} from 'node:path'
 import {fileURLToPath} from 'node:url'
-
-// next is installed at the repo/plugin root, one level above web/.
-// Both outputFileTracingRoot and turbopack.root must agree on this directory
-// so that Turbopack can resolve next/package.json from web/app.
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  distDir: '../dist/web',
-  outputFileTracingRoot: root,
+  output: 'standalone',
+  // The plugin ships its own lockfile alongside the host repo's; pin the trace
+  // root to this directory so Next doesn't guess the wrong workspace root.
+  outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
+  // The app is always served behind the plugin's custom Node server, which owns
+  // the /api/* routes; Next only renders the UI.
   reactStrictMode: true,
-  turbopack: {
-    root,
-  },
 }
 
 export default nextConfig

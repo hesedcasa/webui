@@ -22,10 +22,8 @@ interface RunningServer {
 }
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
-/** The Next.js project lives at `<pluginRoot>/web`; this file is `<pluginRoot>/dist/lib/server.js`. */
-const webDir = join(moduleDir, '..', '..', 'web')
-/** The compiled Next.js build output (distDir: ../dist/web relative to web/). */
-const distWebDir = join(moduleDir, '..', 'web')
+/** Standalone build lives at `<pluginRoot>/web/.next/standalone`; this file is `<pluginRoot>/dist/lib/server.js`. */
+const webDir = join(moduleDir, '..', '..', 'web', '.next', 'standalone')
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body)
@@ -94,9 +92,9 @@ export async function handleApi(config: Config, req: IncomingMessage, res: Serve
 export async function startServer(options: ServerOptions): Promise<RunningServer> {
   const {config, host, port} = options
 
-  if (!existsSync(distWebDir)) {
+  if (!existsSync(webDir)) {
     throw new Error(
-      `No production build found at ${distWebDir}.\n` +
+      `No standalone build found at ${webDir}.\n` +
         `Run "npm run build:web" in the @hesed/webui plugin.`,
     )
   }
