@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/hesedcasa/webui/compare/v0.2.4...v0.2.5) (2026-06-20)
+
+
+### 🛠️ Fixes
+
+* **build:** correct standalone static path for nested Next output ([889ae54](https://github.com/hesedcasa/webui/commit/889ae5415c3d734de4e1827befe7bbc02b270035))
+
 ## [0.2.4](https://github.com/hesedcasa/webui/compare/v0.2.3...v0.2.4) (2026-06-20)
 
 
