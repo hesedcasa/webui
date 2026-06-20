@@ -45,13 +45,7 @@
     "./bin",
     "./dist",
     "./oclif.manifest.json",
-    "./web/app",
-    "./web/components",
-    "./web/lib",
-    "./web/public",
-    "./web/next.config.mjs",
-    "./web/tsconfig.json",
-    "./web/.next"
+    "./web/next.config.mjs"
   ],
   "homepage": "https://github.com/hesedcasa/webui",
   "keywords": [
@@ -77,7 +71,7 @@
     "lint": "eslint",
     "postpack": "shx rm -f oclif.manifest.json",
     "posttest": "npm run lint",
-    "prepack": "npm run build:web && npm run build && oclif manifest && oclif readme",
+    "prepack": "npm run build && npm run build:web && oclif manifest && oclif readme",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
     "test:coverage": "c8 npm test",
     "test:coverage:report": "c8 --reporter=html --reporter=text npm test",
