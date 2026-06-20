@@ -43,7 +43,7 @@ export default function Page() {
       />
       <main className="main">
         {selected ? (
-          <CommandDetail bin={data.bin} command={selected} />
+          <CommandDetail bin={data.bin} command={selected} key={selected.id} />
         ) : (
           <div className="empty">
             Select a command from the left to view its options and run it.

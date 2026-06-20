@@ -26,7 +26,7 @@ $ npm install -g @hesed/webui
 $ webui COMMAND
 running command...
 $ webui (--version)
-@hesed/webui/0.1.0 linux-x64 node-v22.22.3
+@hesed/webui/0.1.0 darwin-arm64 node-v22.22.3
 $ webui --help [COMMAND]
 USAGE
   $ webui COMMAND

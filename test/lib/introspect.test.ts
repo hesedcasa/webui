@@ -18,7 +18,7 @@ type MockCommand = {
 }
 
 function makeConfig(commands: MockCommand[]): Config {
-  return {commands} as unknown as Config
+  return {bin: 'sdkck', commands, name: 'sdkck', version: '1.2.3'} as unknown as Config
 }
 
 describe('describeCommands', () => {
@@ -36,6 +36,17 @@ describe('describeCommands', () => {
     )
     expect(result).to.have.length(1)
     expect(result[0].id).to.equal('visible')
+  })
+
+  it('filters out the web UI command itself', () => {
+    const result = describeCommands(
+      makeConfig([
+        {hidden: false, id: 'webui', pluginName: '@hesed/webui'},
+        {hidden: false, id: 'webui', pluginName: 'another-plugin'},
+        {hidden: false, id: 'greet'},
+      ]),
+    )
+    expect(result.map((command) => command.id)).to.deep.equal(['greet', 'webui'])
   })
 
   it('sorts commands alphabetically by id', () => {
@@ -184,6 +195,27 @@ describe('describeCommands', () => {
   })
 
   describe('command metadata', () => {
+    it('expands supported oclif metadata templates', () => {
+      const [cmd] = describeCommands(
+        makeConfig([
+          {
+            args: {target: {description: 'Target for <%= config.bin %>'}},
+            description: 'Display help for <%= config.bin %>.',
+            flags: {verbose: {description: 'Verbose <%= command.id %>', type: 'boolean'}},
+            id: 'help',
+            summary: '<%= config.name %> v<%= config.version %>',
+            usage: ['<%= config.bin %> <%= command.id %>'],
+          },
+        ]),
+      )
+
+      expect(cmd.description).to.equal('Display help for sdkck.')
+      expect(cmd.summary).to.equal('sdkck v1.2.3')
+      expect(cmd.args[0].description).to.equal('Target for sdkck')
+      expect(cmd.flags[0].description).to.equal('Verbose help')
+      expect(cmd.usage).to.deep.equal(['sdkck help'])
+    })
+
     it('includes all command fields', () => {
       const [cmd] = describeCommands(
         makeConfig([

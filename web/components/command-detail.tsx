@@ -10,7 +10,6 @@ export function CommandDetail({bin, command}: {bin: string; command: CommandMeta
   const [result, setResult] = useState<null | RunResult>(null)
   const [running, setRunning] = useState(false)
 
-  // Reset form state whenever the selected command changes.
   const argv = useMemo(() => buildArgv(command, argValues, flagValues), [command, argValues, flagValues])
   const preview = `${bin || 'sdkck'} ${command.id}${argv.length > 0 ? ' ' + argv.join(' ') : ''}`
 
@@ -32,7 +31,7 @@ export function CommandDetail({bin, command}: {bin: string; command: CommandMeta
   }
 
   return (
-    <div className="detail" key={command.id}>
+    <div className="detail">
       <h1>
         {command.id}
         {command.pluginName && <span className="badge">{command.pluginName}</span>}
