@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/hesedcasa/webui/compare/v0.2.1...v0.2.2) (2026-06-20)
+
+
+### 🛠️ Fixes
+
+* output Next.js build to dist/web and update packaging ([331d36e](https://github.com/hesedcasa/webui/commit/331d36ed6a0d7d1e2c29adb1da16555ceb97399a))
+
 ## [0.2.1](https://github.com/hesedcasa/webui/compare/v0.2.0...v0.2.1) (2026-06-20)
 
 
