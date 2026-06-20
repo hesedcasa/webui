@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/hesedcasa/webui/compare/v0.2.2...v0.2.3) (2026-06-20)
+
+
+### 🛠️ Fixes
+
+* switch Next.js to standalone output for leaner packaging ([51c5130](https://github.com/hesedcasa/webui/commit/51c51309e7d8a149ab8bb8247fb73f9118bb816f))
+
 ## [0.2.2](https://github.com/hesedcasa/webui/compare/v0.2.1...v0.2.2) (2026-06-20)
 
 
