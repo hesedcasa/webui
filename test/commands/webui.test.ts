@@ -1,3 +1,4 @@
+import {Config} from '@oclif/core'
 import {captureOutput, runCommand} from '@oclif/test'
 import {expect} from 'chai'
 import esmock from 'esmock'
@@ -25,18 +26,6 @@ async function loadWebUI(port = 14_040) {
     [fwdSlash(join(__dirname, '../../src/lib/server.ts'))]: {startServer: mockStartServer(port)},
   })
   return WebUI as typeof import('../../src/commands/webui.js').default
-}
-
-/** Run the webui command for up to 300 ms, then return whatever was logged. */
-async function runWithTimeout(WebUI: Awaited<ReturnType<typeof loadWebUI>>, args: string[]) {
-  return captureOutput(async () => {
-    await Promise.race([
-      WebUI.run(args),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, 300)
-      }),
-    ])
-  })
 }
 
 describe('webui command', () => {
@@ -70,6 +59,28 @@ describe('webui command', () => {
   })
 
   describe('startup output', () => {
+    // Pre-load oclif Config once so WebUI.run() receives it directly, bypassing
+    // the async Config.load() inside super.run(). Without this, Config.load() on
+    // slow Windows CI runners can exceed the timeout and leave captureOutput
+    // unpatched before this.log() is ever called, producing empty stdout.
+    let testConfig: Config
+
+    before(async () => {
+      testConfig = await Config.load(root)
+    })
+
+    /** Run the webui command for up to 5 s, then return whatever was logged. */
+    async function runWithTimeout(WebUI: Awaited<ReturnType<typeof loadWebUI>>, args: string[]) {
+      return captureOutput(async () => {
+        await Promise.race([
+          WebUI.run(args, testConfig),
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 5000)
+          }),
+        ])
+      })
+    }
+
     it('logs the ready URL after the server starts', async () => {
       const WebUI = await loadWebUI(14_052)
       const {stdout} = await runWithTimeout(WebUI, ['--port', '14052'])
