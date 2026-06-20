@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/hesedcasa/webui/compare/v0.2.3...v0.2.4) (2026-06-20)
+
+
+### 🛠️ Fixes
+
+* restore turbopack.root and outputFileTracingRoot for monorepo layout ([a0787b1](https://github.com/hesedcasa/webui/commit/a0787b1aeb0a25f533bb26d42d51c9c7dd5aaf1a))
+
 ## [0.2.3](https://github.com/hesedcasa/webui/compare/v0.2.2...v0.2.3) (2026-06-20)
 
 
