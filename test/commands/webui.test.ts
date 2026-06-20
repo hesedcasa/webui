@@ -16,7 +16,7 @@ function mockStartServer(port: number) {
 
 async function loadWebUI(port = 14_040) {
   const {default: WebUI} = await esmock(join(__dirname, '../../src/commands/webui.js'), {
-    [join(__dirname, '../../src/lib/server.js')]: {startServer: mockStartServer(port)},
+    [join(__dirname, '../../src/lib/server.ts')]: {startServer: mockStartServer(port)},
   })
   return WebUI as typeof import('../../src/commands/webui.js').default
 }
