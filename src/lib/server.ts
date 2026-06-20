@@ -22,8 +22,14 @@ interface RunningServer {
 }
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
-/** Standalone build lives at `<pluginRoot>/web/.next/standalone`; this file is `<pluginRoot>/dist/lib/server.js`. */
-const webDir = join(moduleDir, '..', '..', 'web', '.next', 'standalone')
+/**
+ * Standalone build lives at `<pluginRoot>/web/.next/standalone`; this file is
+ * `<pluginRoot>/dist/lib/server.js`. Because `outputFileTracingRoot` in
+ * `web/next.config.mjs` points at the plugin root (so Next can resolve
+ * `next/package.json`), the traced app is nested one level deeper under `web/`,
+ * i.e. the actual Next app dir is `web/.next/standalone/web`.
+ */
+const webDir = join(moduleDir, '..', '..', 'web', '.next', 'standalone', 'web')
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body)
