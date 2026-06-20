@@ -128,10 +128,52 @@ body {
   border-color: var(--accent);
 }
 
+.topic-filter {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.topic-filter label,
+.topic-heading {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.topic-filter select {
+  min-width: 0;
+  padding: 7px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.topic-filter select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .command-list {
   overflow-y: auto;
   flex: 1;
   padding: 8px;
+}
+
+.command-group + .command-group {
+  margin-top: 10px;
+}
+
+.topic-heading {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px 4px;
 }
 
 .command-item {

@@ -37,12 +37,28 @@ interface CommandMeta {
   usage?: string | string[]
 }
 
-function flagToMeta(name: string, flag: Command.Flag.Cached): FlagMeta {
+function renderMetadataText(value: string | undefined, config: Config, commandId: string): string | undefined {
+  if (!value) return value
+
+  const replacements: Record<string, string | undefined> = {
+    'command.id': commandId,
+    'config.bin': config.bin,
+    'config.name': config.name,
+    'config.version': config.version,
+  }
+
+  return value.replaceAll(
+    /<%=\s*(command\.id|config\.(?:bin|name|version))\s*%>/g,
+    (template, key: string) => replacements[key] ?? template,
+  )
+}
+
+function flagToMeta(name: string, flag: Command.Flag.Cached, config: Config, commandId: string): FlagMeta {
   const isBoolean = flag.type === 'boolean'
   return {
     char: flag.char,
     default: isBoolean ? undefined : (flag as {default?: unknown}).default,
-    description: flag.summary ?? flag.description,
+    description: renderMetadataText(flag.summary ?? flag.description, config, commandId),
     multiple: !isBoolean && Boolean((flag as {multiple?: boolean}).multiple),
     name,
     options: isBoolean ? undefined : (flag as {options?: string[]}).options,
@@ -51,10 +67,10 @@ function flagToMeta(name: string, flag: Command.Flag.Cached): FlagMeta {
   }
 }
 
-function argToMeta(name: string, arg: Command.Arg.Cached): ArgMeta {
+function argToMeta(name: string, arg: Command.Arg.Cached, config: Config, commandId: string): ArgMeta {
   return {
     default: (arg as {default?: unknown}).default,
-    description: arg.description,
+    description: renderMetadataText(arg.description, config, commandId),
     name,
     options: (arg as {options?: string[]}).options,
     required: Boolean(arg.required),
@@ -67,19 +83,23 @@ function argToMeta(name: string, arg: Command.Arg.Cached): ArgMeta {
  */
 export function describeCommands(config: Config): CommandMeta[] {
   return config.commands
-    .filter((cmd) => !cmd.hidden)
+    .filter((cmd) => !cmd.hidden && !(cmd.id === 'webui' && cmd.pluginName === '@hesed/webui'))
     .map((cmd) => ({
       aliases: cmd.aliases ?? [],
-      args: Object.entries(cmd.args ?? {}).map(([name, arg]) => argToMeta(name, arg as Command.Arg.Cached)),
-      description: cmd.description,
+      args: Object.entries(cmd.args ?? {}).map(([name, arg]) =>
+        argToMeta(name, arg as Command.Arg.Cached, config, cmd.id),
+      ),
+      description: renderMetadataText(cmd.description, config, cmd.id),
       flags: Object.entries(cmd.flags ?? {})
         .filter(([, flag]) => !(flag as {hidden?: boolean}).hidden)
-        .map(([name, flag]) => flagToMeta(name, flag as Command.Flag.Cached)),
+        .map(([name, flag]) => flagToMeta(name, flag as Command.Flag.Cached, config, cmd.id)),
       id: cmd.id,
       pluginName: cmd.pluginName,
       pluginType: cmd.pluginType,
-      summary: cmd.summary,
-      usage: cmd.usage,
+      summary: renderMetadataText(cmd.summary, config, cmd.id),
+      usage: Array.isArray(cmd.usage)
+        ? cmd.usage.map((usage) => renderMetadataText(usage, config, cmd.id) ?? usage)
+        : renderMetadataText(cmd.usage, config, cmd.id),
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
 }
