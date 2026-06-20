@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/hesedcasa/webui/compare/v0.2.0...v0.2.1) (2026-06-20)
+
+
+### 🛠️ Fixes
+
+* add build:web script and include Next.js build in prepack ([68c1edb](https://github.com/hesedcasa/webui/commit/68c1edbb65c809e3b1df8d58caca566fd32f2299))
+
 ## [0.2.0](https://github.com/hesedcasa/webui/compare/v0.1.0...v0.2.0) (2026-06-20)
 
 
