@@ -26,7 +26,7 @@ $ npm install -g @hesed/webui
 $ webui COMMAND
 running command...
 $ webui (--version)
-@hesed/webui/0.2.0 linux-x64 node-v22.22.3
+@hesed/webui/0.2.1 linux-x64 node-v22.22.3
 $ webui --help [COMMAND]
 USAGE
   $ webui COMMAND
@@ -63,5 +63,5 @@ EXAMPLES
   $ webui webui --host 0.0.0.0
 ```
 
-_See code: [src/commands/webui.ts](https://github.com/hesedcasa/webui/blob/v0.2.0/src/commands/webui.ts)_
+_See code: [src/commands/webui.ts](https://github.com/hesedcasa/webui/blob/v0.2.1/src/commands/webui.ts)_
 <!-- commandsstop -->
