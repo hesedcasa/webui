@@ -1,0 +1,88 @@
+{
+  "name": "@hesed/webui",
+  "version": "0.1.0",
+  "description": "Web UI to browse and execute commands",
+  "author": "Hesed",
+  "bin": {
+    "webui": "./bin/run.js"
+  },
+  "bugs": "https://github.com/hesedcasa/webui/issues",
+  "dependencies": {
+    "@oclif/core": ">=4",
+    "next": "^15.5.0",
+    "next-themes": "^0.4.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^2",
+    "@oclif/prettier-config": "^0.2.1",
+    "@oclif/test": "^4.1.19",
+    "@types/chai": "^5",
+    "@types/fs-extra": "^11.0.4",
+    "@types/mocha": "^10",
+    "@types/node": "^25",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "chai": "^6.2.2",
+    "eslint": "^9",
+    "eslint-config-oclif": "^6",
+    "eslint-config-prettier": "^10",
+    "esmock": "^2.7.3",
+    "mocha": "^11",
+    "oclif": "^4",
+    "prettier": "^3.8.1",
+    "shx": "^0.4.0",
+    "sinon": "^22.0.0",
+    "ts-node": "^10",
+    "ts-prune": "^0.10.3",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "./bin",
+    "./dist",
+    "./oclif.manifest.json",
+    "./web/app",
+    "./web/components",
+    "./web/lib",
+    "./web/public",
+    "./web/next.config.mjs",
+    "./web/tsconfig.json",
+    "./web/.next"
+  ],
+  "homepage": "https://github.com/hesedcasa/webui",
+  "keywords": [
+    "oclif",
+    "sdkck",
+    "ui",
+    "web"
+  ],
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "oclif": {
+    "bin": "webui",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "topics": {}
+  },
+  "repository": "hesedcasa/webui",
+  "scripts": {
+    "build": "shx rm -rf dist tsconfig.tsbuildinfo && tsc -b",
+    "lint": "eslint",
+    "postpack": "shx rm -f oclif.manifest.json",
+    "posttest": "npm run lint",
+    "prepack": "oclif manifest && oclif readme",
+    "test": "mocha --forbid-only \"test/**/*.test.ts\"",
+    "test:coverage": "c8 npm test",
+    "test:coverage:report": "c8 --reporter=html --reporter=text npm test",
+    "version": "oclif readme && git add README.md",
+    "find-deadcode": "ts-prune --ignore '(run|default)'",
+    "format": "eslint --cache --fix --quiet . && prettier --write --cache .",
+    "pre-commit": "npm run format && npm run find-deadcode"
+  }
+}
