@@ -1,6 +1,6 @@
 {
   "name": "@hesed/webui",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Web UI to browse and execute commands",
   "author": "Hesed",
   "bin": {
