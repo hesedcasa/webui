@@ -99,10 +99,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const {config, host, port} = options
 
   if (!existsSync(webDir)) {
-    throw new Error(
-      `No standalone build found at ${webDir}.\n` +
-        `Run "npm run build:web" in the @hesed/webui plugin.`,
-    )
+    throw new Error(`No standalone build found at ${webDir}.\nRun "npm run build:web" in the @hesed/webui plugin.`)
   }
 
   // Imported lazily and loosely typed so the oclif command can be compiled

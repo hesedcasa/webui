@@ -5,7 +5,29 @@ import {expect} from 'chai'
 import {runCommand} from '../../src/lib/executor.js'
 
 function makeConfig(runFn: (id: string, argv: string[]) => Promise<void>): Config {
-  return {runCommand: runFn} as unknown as Config
+  return {
+    findCommand(id: string) {
+      return {
+        async load() {
+          class MockCommand {
+            private argv: string[]
+
+            constructor(argv: string[], _config: unknown) {
+              this.argv = argv
+            }
+
+            async _run() {
+              return runFn(id, this.argv)
+            }
+          }
+          return MockCommand
+        },
+      }
+    },
+    async runHook() {
+      return {failures: [], successes: []}
+    },
+  } as unknown as Config
 }
 
 describe('runCommand (executor)', () => {
@@ -116,7 +138,7 @@ describe('runCommand (executor)', () => {
     expect(result.durationMs).to.be.gte(0)
   })
 
-  it('passes the command id and argv to config.runCommand', async () => {
+  it('passes the command id and argv to the command instance', async () => {
     const calls: Array<{argv: string[]; id: string}> = []
     const config = makeConfig(async (id, argv) => {
       calls.push({argv, id})
