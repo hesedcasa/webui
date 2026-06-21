@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/hesedcasa/webui/compare/v0.2.7...v0.2.8) (2026-06-21)
+
+
+### 🛠️ Fixes
+
+* **server:** set __NEXT_PRIVATE_STANDALONE_CONFIG to suppress lockfile warning ([bde69fc](https://github.com/hesedcasa/webui/commit/bde69fca6889980d9eb05d2dc2715fbb495bd4dc))
+
 ## [0.2.7](https://github.com/hesedcasa/webui/compare/v0.2.6...v0.2.7) (2026-06-21)
 
 
