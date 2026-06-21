@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/hesedcasa/webui/compare/v0.2.6...v0.2.7) (2026-06-21)
+
+
+### 🛠️ Fixes
+
+* **executor:** strip ANSI sequences from output and rebuild inferred topics ([47cf6a4](https://github.com/hesedcasa/webui/commit/47cf6a4e27423bdc40fadb24f8ee009353f6ecf3))
+
 ## [0.2.6](https://github.com/hesedcasa/webui/compare/v0.2.5...v0.2.6) (2026-06-21)
 
 
