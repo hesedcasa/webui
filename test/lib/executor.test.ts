@@ -65,6 +65,30 @@ describe('runCommand (executor)', () => {
     expect(result.output).to.equal('buffered\n')
   })
 
+  it('strips ANSI control sequences from captured output', async () => {
+    const config = makeConfig(async () => {
+      process.stdout.write('\u001B[1mUSAGE\u001B[22m\n')
+    })
+    const result = await runCommand(config, 'test', [])
+    expect(result.output).to.equal('USAGE\n')
+  })
+
+  it('adds missing inferred topics for dynamically registered commands', async () => {
+    const topics = new Map<string, {description?: string; name: string}>()
+    const config = makeConfig(async () => {
+      expect([...topics.keys()]).to.include.members(['jira', 'jira:auth', 'jira:auth:add'])
+    })
+    const configWithTopics = config as unknown as {_topics: typeof topics}
+    configWithTopics._topics = topics
+    Object.defineProperty(config, 'commands', {
+      value: [{description: 'Add Jira authentication', hidden: false, id: 'jira:auth:add'}],
+    })
+
+    await runCommand(config, 'test', [])
+
+    expect(topics.get('jira:auth')?.description).to.equal('Add Jira authentication')
+  })
+
   it('returns success=true when command completes normally', async () => {
     const config = makeConfig(async () => {})
     const result = await runCommand(config, 'test', [])
