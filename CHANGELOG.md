@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.6](https://github.com/hesedcasa/webui/compare/v0.2.5...v0.2.6) (2026-06-21)
+
+
+### 🛠️ Fixes
+
+* **executor:** bypass Config.load to preserve initialized config state ([5d18c55](https://github.com/hesedcasa/webui/commit/5d18c55c7bdadf80a9422b379c1fd44967a6247a))
+* **next:** dynamically resolve turbopack root to silence lockfile warning ([9b23d55](https://github.com/hesedcasa/webui/commit/9b23d555b1a80af41ea54403d33541497f5693cd))
+* **next:** dynamically resolve turbopack root to silence lockfile warning ([e7aeaea](https://github.com/hesedcasa/webui/commit/e7aeaeab5229c4bf044ac4b6d76c2988cc01dc4f))
+
 ## [0.2.5](https://github.com/hesedcasa/webui/compare/v0.2.4...v0.2.5) (2026-06-20)
 
 
