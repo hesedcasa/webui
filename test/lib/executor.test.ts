@@ -103,6 +103,21 @@ describe('runCommand (executor)', () => {
     expect(topics.get('jira:auth')?.name).to.equal('jira:auth')
   })
 
+  it('restores command ids mutated by repeated oclif help rendering', async () => {
+    const command = {hidden: false, id: 'jira auth add'}
+    const commands = new Map([['jira:auth:add', command]])
+    const topics = new Map<string, {description?: string; name: string}>()
+    const config = makeConfig(async () => {})
+    const configWithIndexes = config as unknown as {_commands: typeof commands; _topics: typeof topics}
+    configWithIndexes._commands = commands
+    configWithIndexes._topics = topics
+    Object.defineProperty(config, 'commands', {value: [command]})
+
+    await runCommand(config, 'test', [])
+
+    expect(command.id).to.equal('jira:auth:add')
+  })
+
   it('returns success=true when command completes normally', async () => {
     const config = makeConfig(async () => {})
     const result = await runCommand(config, 'test', [])
@@ -185,6 +200,17 @@ describe('runCommand (executor)', () => {
     expect(calls).to.have.length(1)
     expect(calls[0].id).to.equal('my:command')
     expect(calls[0].argv).to.deep.equal(['--flag', 'value'])
+  })
+
+  it('splits space-separated help paths into CLI-style argv segments', async () => {
+    const calls: string[][] = []
+    const config = makeConfig(async (_id, argv) => {
+      calls.push(argv)
+    })
+
+    await runCommand(config, 'help', ['jira auth', '--nested-commands'])
+
+    expect(calls[0]).to.deep.equal(['jira', 'auth', '--nested-commands'])
   })
 
   it('captures output from multiple commands sequentially', async () => {

@@ -16,14 +16,26 @@ interface TopicRecord {
   name: string
 }
 
+interface CommandRecord {
+  id: string
+}
+
 /**
  * Init hooks can register commands after oclif has built its private topic
  * index. Help reads that index rather than deriving topics from
  * `config.commands`, so rebuild the missing command prefixes before execution.
  */
 function refreshInferredTopics(config: Config): void {
-  const topics = (config as unknown as {_topics?: Map<string, TopicRecord>})._topics
+  const internals = config as unknown as {
+    _commands?: Map<string, CommandRecord>
+    _topics?: Map<string, TopicRecord>
+  }
+  const topics = internals._topics
   if (!topics || !Array.isArray(config.commands)) return
+
+  // Help formatting also replaces separators in Command.id in place. The
+  // private command map retains the canonical id as its key.
+  for (const [id, command] of internals._commands ?? []) command.id = id
 
   for (const command of config.commands) {
     if (command.hidden) continue
@@ -63,8 +75,17 @@ function makeCaptureFn(chunks: string[]): WriteFn {
   }
 }
 
+function normalizeArgv(id: string, argv: string[]): string[] {
+  if (id !== 'help') return argv
+
+  // The help command's single form field represents a command path. A shell
+  // turns `jira auth` into two argv entries, while the browser sends one.
+  return argv.flatMap((arg) => (arg.startsWith('-') ? [arg] : arg.trim().split(/\s+/).filter(Boolean)))
+}
+
 export async function runCommand(config: Config, id: string, argv: string[]): Promise<RunResult> {
   const chunks: string[] = []
+  const normalizedArgv = normalizeArgv(id, argv)
 
   refreshInferredTopics(config)
 
@@ -85,11 +106,11 @@ export async function runCommand(config: Config, id: string, argv: string[]): Pr
     const cached = config.findCommand(id)
     if (!cached) throw new Error(`command ${id} not found`)
     const CommandClass = await cached.load()
-    await config.runHook('prerun', {argv, Command: CommandClass})
+    await config.runHook('prerun', {argv: normalizedArgv, Command: CommandClass})
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const instance = new (CommandClass as any)(argv, config)
+    const instance = new (CommandClass as any)(normalizedArgv, config)
     const result = await instance._run()
-    await config.runHook('postrun', {argv, Command: CommandClass, result})
+    await config.runHook('postrun', {argv: normalizedArgv, Command: CommandClass, result})
   } catch (error_) {
     success = false
     const message =
