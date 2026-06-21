@@ -89,6 +89,20 @@ describe('runCommand (executor)', () => {
     expect(topics.get('jira:auth')?.description).to.equal('Add Jira authentication')
   })
 
+  it('restores topic names mutated by repeated oclif help rendering', async () => {
+    const topics = new Map([['jira:auth', {description: 'Add Jira authentication', name: 'jira auth'}]])
+    const config = makeConfig(async () => {})
+    const configWithTopics = config as unknown as {_topics: typeof topics}
+    configWithTopics._topics = topics
+    Object.defineProperty(config, 'commands', {
+      value: [{description: 'Add Jira authentication', hidden: false, id: 'jira:auth:add'}],
+    })
+
+    await runCommand(config, 'test', [])
+
+    expect(topics.get('jira:auth')?.name).to.equal('jira:auth')
+  })
+
   it('returns success=true when command completes normally', async () => {
     const config = makeConfig(async () => {})
     const result = await runCommand(config, 'test', [])

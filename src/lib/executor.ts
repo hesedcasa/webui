@@ -31,7 +31,15 @@ function refreshInferredTopics(config: Config): void {
     const parts = command.id.split(':')
     while (parts.length > 0) {
       const name = parts.join(':')
-      if (!topics.has(name)) topics.set(name, {description: command.summary ?? command.description, name})
+      const existing = topics.get(name)
+      if (existing) {
+        // oclif's help formatter replaces separators in Topic.name in place.
+        // Restore the canonical name so the next help request can find it.
+        existing.name = name
+      } else {
+        topics.set(name, {description: command.summary ?? command.description, name})
+      }
+
       parts.pop()
     }
   }
