@@ -2,7 +2,7 @@ import type {Config} from '@oclif/core'
 import type {IncomingMessage, Server, ServerResponse} from 'node:http'
 import type {UrlWithParsedQuery} from 'node:url'
 
-import {existsSync} from 'node:fs'
+import {existsSync, readFileSync} from 'node:fs'
 import {createServer} from 'node:http'
 import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -100,6 +100,14 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
 
   if (!existsSync(webDir)) {
     throw new Error(`No standalone build found at ${webDir}.\nRun "npm run build:web" in the @hesed/webui plugin.`)
+  }
+
+  // Tell Next.js to use the baked standalone config so it skips lockfile
+  // scanning and doesn't warn about multiple package-lock.json files.
+  if (!process.env.__NEXT_PRIVATE_STANDALONE_CONFIG) {
+    const serverJs = join(webDir, 'server.js')
+    const match = existsSync(serverJs) ? readFileSync(serverJs, 'utf8').match(/^const nextConfig = (.+)$/m) : null
+    if (match) process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = match[1]
   }
 
   // Imported lazily and loosely typed so the oclif command can be compiled
