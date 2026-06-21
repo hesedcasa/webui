@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.9](https://github.com/hesedcasa/webui/compare/v0.2.8...v0.2.9) (2026-06-21)
+
+
+### 🛠️ Fixes
+
+* **executor:** restore topic names mutated by repeated oclif help rendering ([397f87c](https://github.com/hesedcasa/webui/commit/397f87ce9cad1ee92105e9a3c96f80c03b3bd7b6))
+
 ## [0.2.8](https://github.com/hesedcasa/webui/compare/v0.2.7...v0.2.8) (2026-06-21)
 
 
