@@ -13,12 +13,30 @@ interface MockResponse {
   writeHead(code: number): void
 }
 
+function makeCommandStub(runFn?: (argv: string[]) => void) {
+  return {
+    async load() {
+      class StubCommand {
+        private argv: string[]
+
+        constructor(argv: string[], _config: unknown) {
+          this.argv = argv
+        }
+
+        async _run() {
+          runFn?.(this.argv)
+        }
+      }
+      return StubCommand
+    },
+  }
+}
+
 function makeConfig(
   overrides: Partial<{
     bin: string
     commands: unknown[]
     findCommand: (id: string) => unknown
-    runCommand: (id: string, argv: string[]) => Promise<void>
     version: string
   }> = {},
 ): Config {
@@ -26,7 +44,9 @@ function makeConfig(
     bin: 'sdkck',
     commands: [],
     findCommand(_id: string) {},
-    async runCommand(_id: string, _argv: string[]) {},
+    async runHook() {
+      return {failures: [], successes: []}
+    },
     version: '1.0.0',
     ...overrides,
   } as unknown as Config
@@ -133,10 +153,10 @@ describe('handleApi', () => {
 
     it('returns 200 with command output on success', async () => {
       const config = makeConfig({
-        findCommand: () => ({id: 'hello'}),
-        async runCommand() {
-          process.stdout.write('greetings\n')
-        },
+        findCommand: () =>
+          makeCommandStub(() => {
+            process.stdout.write('greetings\n')
+          }),
       })
       const res = makeRes()
       await handleApi(config, makeReq('POST', '/api/run', {argv: [], id: 'hello'}), res as unknown as ServerResponse)
@@ -149,10 +169,10 @@ describe('handleApi', () => {
     it('passes argv to the command', async () => {
       const captured: string[][] = []
       const config = makeConfig({
-        findCommand: () => ({id: 'cmd'}),
-        async runCommand(_id, argv) {
-          captured.push(argv)
-        },
+        findCommand: () =>
+          makeCommandStub((argv) => {
+            captured.push(argv)
+          }),
       })
       const res = makeRes()
       await handleApi(
@@ -166,10 +186,10 @@ describe('handleApi', () => {
     it('treats non-array argv as empty', async () => {
       const captured: string[][] = []
       const config = makeConfig({
-        findCommand: () => ({id: 'cmd'}),
-        async runCommand(_id, argv) {
-          captured.push(argv)
-        },
+        findCommand: () =>
+          makeCommandStub((argv) => {
+            captured.push(argv)
+          }),
       })
       const res = makeRes()
       await handleApi(

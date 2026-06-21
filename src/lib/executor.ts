@@ -40,7 +40,18 @@ export async function runCommand(config: Config, id: string, argv: string[]): Pr
   let error: string | undefined
 
   try {
-    await config.runCommand(id, argv)
+    // Instantiate the command directly with the existing config rather than going
+    // through config.runCommand(), which calls the static Command.run() → Config.load()
+    // internally. Config.load() rebuilds the config from scratch and loses dynamically
+    // registered topics and commands (e.g. the jira topic from loaded user plugins).
+    const cached = config.findCommand(id)
+    if (!cached) throw new Error(`command ${id} not found`)
+    const CommandClass = await cached.load()
+    await config.runHook('prerun', {argv, Command: CommandClass})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const instance = new (CommandClass as any)(argv, config)
+    const result = await instance._run()
+    await config.runHook('postrun', {argv, Command: CommandClass, result})
   } catch (error_) {
     success = false
     const message =
