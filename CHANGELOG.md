@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.11](https://github.com/hesedcasa/webui/compare/v0.2.10...v0.2.11) (2026-06-23)
+
+
+### ♻️ Chores
+
+* extract shared utilities into @hesed/plugin-lib ([a0e4bdf](https://github.com/hesedcasa/webui/commit/a0e4bdfc27d3120c3daa0da8c7939fd7241c0990))
+* extract shared utilities into @hesed/plugin-lib ([bb64cfd](https://github.com/hesedcasa/webui/commit/bb64cfd65bd0ff342e0de022a75ef0ee904bb97a))
+
 ## [0.2.10](https://github.com/hesedcasa/webui/compare/v0.2.9...v0.2.10) (2026-06-21)
 
 
