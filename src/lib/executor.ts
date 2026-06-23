@@ -1,5 +1,6 @@
 import type {Config} from '@oclif/core'
 
+import {refreshInferredTopics} from '@hesed/plugin-lib'
 import stripAnsi from 'strip-ansi'
 
 interface RunResult {
@@ -10,52 +11,6 @@ interface RunResult {
 }
 
 type WriteFn = typeof process.stdout.write
-
-interface TopicRecord {
-  description?: string
-  name: string
-}
-
-interface CommandRecord {
-  id: string
-}
-
-/**
- * Init hooks can register commands after oclif has built its private topic
- * index. Help reads that index rather than deriving topics from
- * `config.commands`, so rebuild the missing command prefixes before execution.
- */
-function refreshInferredTopics(config: Config): void {
-  const internals = config as unknown as {
-    _commands?: Map<string, CommandRecord>
-    _topics?: Map<string, TopicRecord>
-  }
-  const topics = internals._topics
-  if (!topics || !Array.isArray(config.commands)) return
-
-  // Help formatting also replaces separators in Command.id in place. The
-  // private command map retains the canonical id as its key.
-  for (const [id, command] of internals._commands ?? []) command.id = id
-
-  for (const command of config.commands) {
-    if (command.hidden) continue
-
-    const parts = command.id.split(':')
-    while (parts.length > 0) {
-      const name = parts.join(':')
-      const existing = topics.get(name)
-      if (existing) {
-        // oclif's help formatter replaces separators in Topic.name in place.
-        // Restore the canonical name so the next help request can find it.
-        existing.name = name
-      } else {
-        topics.set(name, {description: command.summary ?? command.description, name})
-      }
-
-      parts.pop()
-    }
-  }
-}
 
 /**
  * Execute an oclif command by id within the current process, capturing

@@ -1,5 +1,7 @@
 import type {Command, Config} from '@oclif/core'
 
+import {interpolateTemplate, listCommands} from '@hesed/plugin-lib'
+
 /**
  * Serializable description of a single command flag, suitable for rendering a
  * form control in the web UI.
@@ -39,18 +41,7 @@ interface CommandMeta {
 
 function renderMetadataText(value: string | undefined, config: Config, commandId: string): string | undefined {
   if (!value) return value
-
-  const replacements: Record<string, string | undefined> = {
-    'command.id': commandId,
-    'config.bin': config.bin,
-    'config.name': config.name,
-    'config.version': config.version,
-  }
-
-  return value.replaceAll(
-    /<%=\s*(command\.id|config\.(?:bin|name|version))\s*%>/g,
-    (template, key: string) => replacements[key] ?? template,
-  )
+  return interpolateTemplate(value, {command: {id: commandId}, config})
 }
 
 function flagToMeta(name: string, flag: Command.Flag.Cached, config: Config, commandId: string): FlagMeta {
@@ -82,8 +73,8 @@ function argToMeta(name: string, arg: Command.Arg.Cached, config: Config, comman
  * {@link Config}, including dynamically registered ones.
  */
 export function describeCommands(config: Config): CommandMeta[] {
-  return config.commands
-    .filter((cmd) => !cmd.hidden && !(cmd.id === 'webui' && cmd.pluginName === '@hesed/webui'))
+  return listCommands(config)
+    .filter((cmd) => !(cmd.id === 'webui' && cmd.pluginName === '@hesed/webui'))
     .map((cmd) => ({
       aliases: cmd.aliases ?? [],
       args: Object.entries(cmd.args ?? {}).map(([name, arg]) =>
