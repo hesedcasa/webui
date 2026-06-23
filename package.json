@@ -23,7 +23,7 @@
     "@types/chai": "^5",
     "@types/fs-extra": "^11.0.4",
     "@types/mocha": "^10",
-    "@types/node": "^25",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "chai": "^6.2.2",
