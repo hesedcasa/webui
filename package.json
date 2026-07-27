@@ -27,7 +27,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "chai": "^6.2.2",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-oclif": "^6",
     "eslint-config-prettier": "^10",
     "esmock": "^2.7.3",
