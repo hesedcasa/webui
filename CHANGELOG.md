@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.12](https://github.com/hesedcasa/webui/compare/v0.2.11...v0.2.12) (2026-08-12)
+
+
+### ♻️ Chores
+
+* upgrade ESLint and fix TypeScript compilation errors ([#34](https://github.com/hesedcasa/webui/issues/34)) ([292e494](https://github.com/hesedcasa/webui/commit/292e494b05da7f1b1ead80b514be67730285656d))
+
 ## [0.2.11](https://github.com/hesedcasa/webui/compare/v0.2.10...v0.2.11) (2026-06-23)
 
 
