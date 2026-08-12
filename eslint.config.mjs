@@ -20,24 +20,16 @@ const config = [
     files: ['test/**/*.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
-  // eslint.config.mjs references typescript-eslint, which is a transitive
-  // dependency (via eslint-config-oclif) rather than a direct one — relax the
-  // extraneous-dependency checks for this file only.
-  {
-    files: ['eslint.config.mjs'],
-    rules: {
-      'import-x/no-extraneous-dependencies': 'off',
-      'n/no-extraneous-import': 'off',
-    },
-  },
   // Relax overly-strict rules from eslint-config-oclif@7 across the project.
   {
     rules: {
       // Buffer is the correct type for Node stream/file APIs used here
       '@typescript-eslint/no-restricted-types': 'off',
       'n/prefer-global/buffer': 'off',
-      // Both tsconfigs target ES2022, where the `v` regex flag is unavailable
+      // Both tsconfigs target ES2022, where the `v` regex flag isn't available
+      // and `Array#toSorted()` (ES2023) can't be assumed at runtime either
       'require-unicode-regexp': 'off',
+      'unicorn/no-array-sort': 'off',
     },
   },
   {
@@ -48,8 +40,6 @@ const config = [
       '@typescript-eslint/no-unsafe-member-access': 'off',
       'unicorn/consistent-boolean-name': 'off',
       'unicorn/consistent-class-member-order': 'off',
-      // `Array#toSorted()` (ES2023) isn't available at the ES2022 target
-      'unicorn/no-array-sort': 'off',
     },
   },
   // The Next.js app under web/ is bundled by Next, which resolves extensionless
