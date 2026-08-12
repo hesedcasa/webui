@@ -15,9 +15,9 @@ export default function Page() {
 
   useEffect(() => {
     fetch('/api/commands')
-      .then((res) => res.json())
-      .then((json: CommandsResponse) => setData(json))
-      .catch((error_) => setError(String(error_)))
+      .then(async (res) => (await res.json()) as CommandsResponse)
+      .then((json) => setData(json))
+      .catch((error_: unknown) => setError(String(error_)))
   }, [])
 
   if (error) {

@@ -3,7 +3,7 @@ import type {Config} from '@oclif/core'
 import {refreshInferredTopics} from '@hesed/plugin-lib'
 import stripAnsi from 'strip-ansi'
 
-interface RunResult {
+type RunResult = {
   durationMs: number
   error?: string
   output: string

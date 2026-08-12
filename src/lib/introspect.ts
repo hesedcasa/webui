@@ -6,7 +6,7 @@ import {interpolateTemplate, listCommands} from '@hesed/plugin-lib'
  * Serializable description of a single command flag, suitable for rendering a
  * form control in the web UI.
  */
-interface FlagMeta {
+type FlagMeta = {
   char?: string
   default?: unknown
   description?: string
@@ -18,7 +18,7 @@ interface FlagMeta {
 }
 
 /** Serializable description of a positional argument. */
-interface ArgMeta {
+type ArgMeta = {
   default?: unknown
   description?: string
   name: string
@@ -27,7 +27,7 @@ interface ArgMeta {
 }
 
 /** Serializable description of a command, sent to the browser as JSON. */
-interface CommandMeta {
+type CommandMeta = {
   aliases: string[]
   args: ArgMeta[]
   description?: string
@@ -77,13 +77,11 @@ export function describeCommands(config: Config): CommandMeta[] {
     .filter((cmd) => !(cmd.id === 'webui' && cmd.pluginName === '@hesed/webui'))
     .map((cmd) => ({
       aliases: cmd.aliases ?? [],
-      args: Object.entries(cmd.args ?? {}).map(([name, arg]) =>
-        argToMeta(name, arg as Command.Arg.Cached, config, cmd.id),
-      ),
+      args: Object.entries(cmd.args ?? {}).map(([name, arg]) => argToMeta(name, arg, config, cmd.id)),
       description: renderMetadataText(cmd.description, config, cmd.id),
       flags: Object.entries(cmd.flags ?? {})
         .filter(([, flag]) => !(flag as {hidden?: boolean}).hidden)
-        .map(([name, flag]) => flagToMeta(name, flag as Command.Flag.Cached, config, cmd.id)),
+        .map(([name, flag]) => flagToMeta(name, flag, config, cmd.id)),
       id: cmd.id,
       pluginName: cmd.pluginName,
       pluginType: cmd.pluginType,

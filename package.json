@@ -27,8 +27,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "chai": "^6.2.2",
-    "eslint": "^9",
-    "eslint-config-oclif": "^6",
+    "eslint": "^10",
+    "eslint-config-oclif": "^7",
     "eslint-config-prettier": "^10",
     "esmock": "^2.7.3",
     "mocha": "^11",
@@ -38,10 +38,11 @@
     "sinon": "^22.0.0",
     "ts-node": "^10",
     "ts-prune": "^0.10.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "files": [
     "./bin",
