@@ -5,7 +5,7 @@ import {expect} from 'chai'
 
 import {handleApi} from '../../src/lib/server.js'
 
-interface MockResponse {
+type MockResponse = {
   body(): unknown
   end(data?: string): void
   headersSent: boolean

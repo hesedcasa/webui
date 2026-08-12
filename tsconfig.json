@@ -12,7 +12,7 @@
     "composite": true
   },
   "include": ["./src/**/*"],
-  "exclude": ["./web", "./dist", "./node_modules"],
+  "exclude": ["./web", "./dist", "./node_modules", "./test/**/*"],
   "ts-node": {
     "esm": true
   }

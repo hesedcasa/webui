@@ -31,7 +31,7 @@ export function CommandList({
       counts.set(commandTopic, (counts.get(commandTopic) ?? 0) + 1)
     }
 
-    return [...counts].sort(([a], [b]) => a.localeCompare(b))
+    return [...counts].toSorted(([a], [b]) => a.localeCompare(b))
   }, [commands])
 
   const filtered = commands.filter((cmd) => {

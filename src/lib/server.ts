@@ -1,27 +1,25 @@
 import type {Config} from '@oclif/core'
-import type {IncomingMessage, Server, ServerResponse} from 'node:http'
-import type {UrlWithParsedQuery} from 'node:url'
 
 import {existsSync, readFileSync} from 'node:fs'
-import {createServer} from 'node:http'
-import {dirname, join} from 'node:path'
-import {fileURLToPath} from 'node:url'
+import {createServer, type IncomingMessage, type Server, type ServerResponse} from 'node:http'
+import path from 'node:path'
+import {fileURLToPath, type UrlWithParsedQuery} from 'node:url'
 
 import {runCommand} from './executor.js'
 import {describeCommands} from './introspect.js'
 
-interface ServerOptions {
+type ServerOptions = {
   config: Config
   host: string
   port: number
 }
 
-interface RunningServer {
+type RunningServer = {
   server: Server
   url: string
 }
 
-const moduleDir = dirname(fileURLToPath(import.meta.url))
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 /**
  * Standalone build lives at `<pluginRoot>/web/.next/standalone`; this file is
  * `<pluginRoot>/dist/lib/server.js`. Because `outputFileTracingRoot` in
@@ -29,7 +27,7 @@ const moduleDir = dirname(fileURLToPath(import.meta.url))
  * `next/package.json`), the traced app is nested one level deeper under `web/`,
  * i.e. the actual Next app dir is `web/.next/standalone/web`.
  */
-const webDir = join(moduleDir, '..', '..', 'web', '.next', 'standalone', 'web')
+const webDir = path.join(moduleDir, '..', '..', 'web', '.next', 'standalone', 'web')
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body)
@@ -105,8 +103,8 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   // Tell Next.js to use the baked standalone config so it skips lockfile
   // scanning and doesn't warn about multiple package-lock.json files.
   if (!process.env.__NEXT_PRIVATE_STANDALONE_CONFIG) {
-    const serverJs = join(webDir, 'server.js')
-    const match = existsSync(serverJs) ? readFileSync(serverJs, 'utf8').match(/^const nextConfig = (.+)$/m) : null
+    const serverJs = path.join(webDir, 'server.js')
+    const match = existsSync(serverJs) ? /^const nextConfig = (.+)$/m.exec(readFileSync(serverJs, 'utf8')) : null
     if (match) process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = match[1]
   }
 
@@ -128,7 +126,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       .then((handled) => {
         if (!handled) handle(req, res)
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (!res.headersSent) sendJson(res, 500, {error: error instanceof Error ? error.message : String(error)})
       })
   })

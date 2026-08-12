@@ -11,6 +11,7 @@ export default class WebUI extends HostConfigCommand {
     '<%= config.bin %> <%= command.id %> --port 8080 --open',
     '<%= config.bin %> <%= command.id %> --host 0.0.0.0',
   ]
+
   static flags = {
     host: Flags.string({
       default: '127.0.0.1',
@@ -45,6 +46,7 @@ export default class WebUI extends HostConfigCommand {
 
     // The HTTP server keeps the event loop alive; this promise never resolves,
     // so the command stays running until the user interrupts it.
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never settles; the server keeps the process alive
     await new Promise<void>(() => {})
   }
 

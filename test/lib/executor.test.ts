@@ -67,7 +67,7 @@ describe('runCommand (executor)', () => {
 
   it('strips ANSI control sequences from captured output', async () => {
     const config = makeConfig(async () => {
-      process.stdout.write('\u001B[1mUSAGE\u001B[22m\n')
+      process.stdout.write('\u{1B}[1mUSAGE\u{1B}[22m\n')
     })
     const result = await runCommand(config, 'test', [])
     expect(result.output).to.equal('USAGE\n')
@@ -153,7 +153,6 @@ describe('runCommand (executor)', () => {
 
   it('handles non-Error throws', async () => {
     const config = makeConfig(async () => {
-      // eslint-disable-next-line no-throw-literal
       throw 'string error'
     })
     const result = await runCommand(config, 'test', [])

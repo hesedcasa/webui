@@ -1,4 +1,4 @@
-export interface FlagMeta {
+export type FlagMeta = {
   char?: string
   default?: unknown
   description?: string
@@ -9,7 +9,7 @@ export interface FlagMeta {
   type: 'boolean' | 'option'
 }
 
-export interface ArgMeta {
+export type ArgMeta = {
   default?: unknown
   description?: string
   name: string
@@ -17,7 +17,7 @@ export interface ArgMeta {
   required: boolean
 }
 
-export interface CommandMeta {
+export type CommandMeta = {
   aliases: string[]
   args: ArgMeta[]
   description?: string
@@ -29,13 +29,13 @@ export interface CommandMeta {
   usage?: string | string[]
 }
 
-export interface CommandsResponse {
+export type CommandsResponse = {
   bin: string
   commands: CommandMeta[]
   version: string
 }
 
-export interface RunResult {
+export type RunResult = {
   durationMs: number
   error?: string
   output: string
@@ -61,10 +61,11 @@ export function buildArgv(
       if (value === true) argv.push(`--${flag.name}`)
     } else if (typeof value === 'string' && value !== '') {
       if (flag.multiple) {
-        for (const part of value
+        const parts = value
           .split(',')
           .map((s) => s.trim())
-          .filter(Boolean)) {
+          .filter(Boolean)
+        for (const part of parts) {
           argv.push(`--${flag.name}`, part)
         }
       } else {
