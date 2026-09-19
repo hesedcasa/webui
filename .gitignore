@@ -20,3 +20,7 @@ pnpm-lock.yaml
 .eslintcache
 *.tsbuildinfo
 coverage/
+.env
+
+# E2E run artifacts: one full-page screenshot per executed browser test.
+test/e2e/screenshots/
