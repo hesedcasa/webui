@@ -1,0 +1,89 @@
+name: Run end-to-end tests
+
+permissions: read-all
+
+# No secrets and no external services: the web UI suite only runs local,
+# read-only commands against a throwaway config dir, and installing the
+# plugin only drops a tarball into a throwaway home — so this runs per push
+# and pull request.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: webui-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-e2e-tests:
+    name: End-to-end tests (standalone CLI + sdkck host)
+    runs-on: ubuntu-latest
+    # Two legs (standalone CLI, then the same suite via sdkck); the sdkck leg
+    # additionally packs and installs this build into a throwaway sdkck home.
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        # Pinned to a full commit SHA: a mutable major tag could be repointed
+        # to different code, which would run before anything here is reviewed.
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 2
+          # Nothing here pushes, and the default would leave GITHUB_TOKEN in
+          # the workspace git config for every later step to reuse.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          cache: npm
+          node-version-file: '.nvmrc'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the Playwright Chromium browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the CLI and the web app
+        run: |
+          npm run build
+          npm run build:web
+          # `next build` leaves static assets out of the standalone output;
+          # prepack copies them in before packing, and the standalone server
+          # needs them to hydrate the page.
+          npx shx cp -r web/.next/static web/.next/standalone/web/.next/static
+
+      - name: Run end-to-end tests through the standalone CLI
+        run: npm run test:e2e
+
+      # Second leg: the same suite through the latest sdkck host CLI with this
+      # build packed (exercising `prepack`) and installed as its
+      # `@hesed/webui` plugin — covering the packed artifacts and plugin
+      # dispatch under a host. This build is installed before any sdkck
+      # command runs (a fresh sdkck would otherwise auto-install released
+      # plugins over the build under test). The throwaway sdkck home
+      # (mktemp -d) keeps the install, its dependencies, config and caches off
+      # the runner's real sdkck setup; the test side finds it via
+      # E2E_SDKCK_HOME.
+      - name: Install the latest sdkck and this build
+        run: |
+          npm install --no-save sdkck
+          home="$(mktemp -d)"
+          echo "E2E_SDKCK_HOME=$home" >> "$GITHUB_ENV"
+          # A `file:` URL is required: sdkck resolves any bare path containing
+          # a slash as a GitHub org/repo. Packing into the throwaway home
+          # keeps the tarball out of the workspace.
+          tgz="$(npm pack --pack-destination "$home" | tail -n 1)"
+          SDKCK_CACHE_DIR="$home/cache" \
+          SDKCK_CONFIG_DIR="$home/config" \
+          SDKCK_DATA_DIR="$home/data" \
+            ./node_modules/.bin/sdkck plugins install "file:$home/$tgz"
+
+      - name: Run end-to-end tests via sdkck
+        run: npm run test:e2e
+        env:
+          E2E_HOST_CLI: sdkck
+          E2E_SDKCK_HOME: ${{ env.E2E_SDKCK_HOME }}
