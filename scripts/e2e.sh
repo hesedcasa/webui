@@ -2,12 +2,13 @@
 # Runs the end-to-end suite twice: once through the built standalone CLI
 # (`bin/run.js`), then again through the latest sdkck host CLI with this build
 # packed (`npm pack`, exercising `prepack`) and installed as its
-# `@hesed/webui` plugin. On both legs Playwright drives a headless Chromium
-# against the served web UI, and the JSON API is asserted over real HTTP.
+# `@hesed/webui` plugin. On both legs the @playwright/test runner drives a
+# headless Chromium against the served web UI, and the JSON API is asserted
+# over real HTTP.
 #
-#   npm run test:e2e                            # everything
-#   npm run test:e2e -- --grep "runs a command" # extra args go through to mocha
-#   npm run test:e2e -- --keep                  # leave the throwaway home behind
+#   npm run test:e2e:all                        # everything
+#   npm run test:e2e:all -- --grep "runs a command" # extra args go to playwright test
+#   npm run test:e2e:all -- --keep              # leave the throwaway home behind
 #
 # No secrets and no external services are REQUIRED: the core UI tests only
 # exercise commands that are fully local and read-only (`synonyms export` on a
@@ -44,12 +45,12 @@ if [ -f "$REPO_ROOT/.env" ]; then
 fi
 
 KEEP=0
-MOCHA_ARGS=()
+PW_ARGS=()
 
 for arg in "$@"; do
   case "$arg" in
     --keep) KEEP=1 ;;
-    *) MOCHA_ARGS+=("$arg") ;;
+    *) PW_ARGS+=("$arg") ;;
   esac
 done
 
@@ -85,11 +86,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-run_mocha() {
-  # Delegates to the `e2e:mocha` script rather than calling mocha directly, so
-  # both legs share one glob and one timeout.
-  # The +expansion guard keeps `set -u` happy with an empty array on bash 3.2.
-  npm run --silent e2e:mocha -- ${MOCHA_ARGS[@]+"${MOCHA_ARGS[@]}"}
+run_playwright() {
+  # Delegates to the `test:e2e` script (playwright test) so both legs share
+  # one config. The +expansion guard keeps `set -u` happy with an empty array
+  # on bash 3.2.
+  npm run --silent test:e2e -- ${PW_ARGS[@]+"${PW_ARGS[@]}"}
 }
 
 echo "==> Ensuring the Playwright Chromium browser is installed"
@@ -105,7 +106,7 @@ npm run --silent build:web
 shx cp -r web/.next/static web/.next/standalone/web/.next/static
 
 echo "==> Leg 1: end-to-end tests through the standalone CLI"
-run_mocha
+run_playwright
 
 echo "==> Downloading the latest sdkck"
 # --no-save resolves "latest" from the registry on every run without touching
@@ -165,4 +166,4 @@ if [ -n "${TRELLO_API_KEY:-}" ] && [ -n "${TRELLO_SECRET:-}" ]; then
 fi
 
 echo "==> Leg 2: end-to-end tests through the sdkck host CLI"
-E2E_HOST_CLI=sdkck run_mocha
+E2E_HOST_CLI=sdkck run_playwright

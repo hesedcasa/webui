@@ -55,7 +55,7 @@ jobs:
           npx shx cp -r web/.next/static web/.next/standalone/web/.next/static
 
       - name: Run end-to-end tests through the standalone CLI
-        run: npm run e2e:mocha
+        run: npm run test:e2e
 
       # Second leg: the same suite through the latest sdkck host CLI with this
       # build packed (exercising `prepack`) and installed as its
@@ -81,7 +81,7 @@ jobs:
             ./node_modules/.bin/sdkck plugins install "file:$home/$tgz"
 
       - name: Run end-to-end tests via sdkck
-        run: npm run e2e:mocha
+        run: npm run test:e2e
         env:
           E2E_HOST_CLI: sdkck
           E2E_SDKCK_HOME: ${{ env.E2E_SDKCK_HOME }}

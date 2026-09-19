@@ -22,5 +22,9 @@ pnpm-lock.yaml
 coverage/
 .env
 
-# E2E run artifacts: one full-page screenshot per executed browser test.
-test/e2e/screenshots/
+# Playwright run artifacts: the HTML report plus per-test results, error
+# screenshots and trace bundles.
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

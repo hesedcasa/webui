@@ -1,17 +1,17 @@
-import {expect} from 'chai'
+import type {Page} from '@playwright/test'
+
 import {type ChildProcess, execFile, spawn} from 'node:child_process'
+import {existsSync} from 'node:fs'
 import fs from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {promisify} from 'node:util'
-import {type Browser, chromium, type Page} from 'playwright'
 
 const execFileAsync = promisify(execFile)
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const CLI = path.join(REPO_ROOT, 'bin', 'run.js')
 const SDKCK = path.join(REPO_ROOT, 'node_modules', '.bin', 'sdkck')
 
 /**
@@ -21,7 +21,9 @@ const SDKCK = path.join(REPO_ROOT, 'node_modules', '.bin', 'sdkck')
  * exercise the credential-backed plugins. Values of secret-looking keys are
  * remembered so redactSecrets() can keep them out of failure messages.
  *
- * No .env means the credential-backed plugin suites skip themselves.
+ * playwright.config.ts imports this module before spawning the server, which
+ * puts the variables in place for both the server subprocess and the tests.
+ * No .env means the credential-backed plugin suite skips itself.
  */
 const loadedSecrets: string[] = []
 
@@ -55,8 +57,6 @@ export function redactSecrets(text: string): string {
 }
 
 export type WebUiServer = {
-  /** The bin name the UI brands itself with ('webui' standalone, 'sdkck' via the host). */
-  bin: string
   proc: ChildProcess
   url: string
 }
@@ -68,11 +68,12 @@ export type JsonResponse<T> = {
 }
 
 /**
- * Whether the suite is running its second leg, through the sdkck host CLI.
+ * Whether the suite is running the sdkck-host leg rather than the standalone
+ * one.
  *
  * Set by scripts/e2e.sh (and the CI workflow) after this build has been packed
- * and installed as the host's `@hesed/webui` plugin. When false, startWebUi
- * drives the built standalone CLI instead.
+ * and installed as the host's `@hesed/webui` plugin. When false, the config's
+ * webServer and startWebUi drive the built standalone CLI instead.
  */
 export function isSdkckLeg(): boolean {
   return process.env.E2E_HOST_CLI === 'sdkck'
@@ -90,44 +91,54 @@ export function expectedBin(): string {
 }
 
 /**
- * Builds the subprocess invocation for the configured host CLI.
+ * The throwaway oclif config dir playwright.config.ts created for the run.
  *
- * By default the built standalone CLI (`bin/run.js`) runs with `WEBUI_CONFIG_DIR`
- * (oclif scopes that env var by bin name) pointed at a throwaway dir. When
- * `E2E_HOST_CLI=sdkck`, the same arguments go to the installed `sdkck` binary —
- * this plugin's command id (`webui`) is host-agnostic, so the argv needs no
- * rewrite — and oclif's bin-scoped `SDKCK_*` dirs are redirected into the
- * throwaway sdkck home (`E2E_SDKCK_HOME`) that scripts/e2e.sh installed this
- * build into.
+ * All suites share it: the web UI reads no config itself, and the sdkck leg
+ * seeds auth profiles and imports specs into it. Global teardown removes it.
  *
- * @param args Command line arguments, e.g. ['webui', '--port', '4040'].
- * @param configDir The dir the CLI writes config into, from createConfigDir().
- * @returns The executable, its argv, and env overrides to layer over
- *   process.env.
+ * @returns Absolute path to the config dir.
  */
-function hostInvocation(
-  args: string[],
-  configDir: string,
-): {argv: string[]; bin: string; command: string; env: Record<string, string>} {
-  if (isSdkckLeg()) {
-    const home = process.env.E2E_SDKCK_HOME
-    if (!home) {
-      throw new Error('E2E_HOST_CLI=sdkck requires E2E_SDKCK_HOME — set by scripts/e2e.sh or the CI workflow')
-    }
+export function sharedConfigDir(): string {
+  return configDirForBaseUrl(sharedBaseUrl())
+}
 
-    return {
-      argv: args,
-      bin: 'sdkck',
-      command: SDKCK,
-      env: {
-        SDKCK_CACHE_DIR: path.join(home, 'cache'),
-        SDKCK_CONFIG_DIR: configDir,
-        SDKCK_DATA_DIR: path.join(home, 'data'),
-      },
-    }
-  }
+/**
+ * The base URL of the server playwright.config.ts's webServer manages.
+ *
+ * The webServer captures it from the CLI's `Web UI ready at <url>` line into
+ * `E2E_BASE_URL` (see the `wait` named group in playwright.config.ts), so the
+ * value is only available once the run's server is up.
+ *
+ * @returns Absolute base URL, e.g. 'http://127.0.0.1:49152'.
+ */
+export function sharedBaseUrl(): string {
+  const url = process.env.E2E_BASE_URL
+  if (!url) throw new Error('E2E_BASE_URL is required — the webServer sets it from the ready line')
+  return url
+}
 
-  return {argv: [CLI, ...args], bin: 'webui', command: process.execPath, env: {WEBUI_CONFIG_DIR: configDir}}
+/**
+ * The throwaway oclif config dir for a server on the given port.
+ *
+ * Derived from the port rather than minted per process (Playwright workers
+ * re-evaluate the config), so every process of a run computes the same path,
+ * while concurrent runs — which always claim different ports — stay isolated.
+ *
+ * @param port The port the server serves on.
+ * @returns Absolute path to the config dir.
+ */
+export function configDirForPort(port: number): string {
+  return path.join(os.tmpdir(), `webui-e2e-${port}`)
+}
+
+/**
+ * The throwaway oclif config dir for the server behind a base URL.
+ *
+ * @param baseUrl The server's base URL, e.g. sharedBaseUrl().
+ * @returns Absolute path to the config dir.
+ */
+export function configDirForBaseUrl(baseUrl: string): string {
+  return configDirForPort(Number(new URL(baseUrl).port))
 }
 
 /**
@@ -136,12 +147,12 @@ function hostInvocation(
  * The `webui` command echoes the requested port in its ready line, so
  * `--port 0` would report a URL the browser cannot use, and the default 4040
  * may be the developer's own running web UI. The race between releasing the
- * port and the server binding it is small; if it loses, startWebUi fails with
- * the port named in the CLI's captured output.
+ * port and the server binding it is small; if it loses, the server start fails
+ * with the port named in the CLI's captured output.
  *
  * @returns A port number likely to be free on 127.0.0.1.
  */
-export async function freePort(): Promise<number> {
+export async function claimFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer()
     server.once('error', reject)
@@ -155,51 +166,54 @@ export async function freePort(): Promise<number> {
 }
 
 /**
- * Creates a throwaway oclif config dir for the suite to run against.
+ * Builds the shell command and env overrides that serve the web UI through
+ * the configured host CLI.
  *
- * The web UI reads no config itself — the dir starts empty and exists only so
- * the CLI under test never touches the developer's real sdkck/webui config.
+ * By default the built standalone CLI (`bin/run.js`) runs with
+ * `WEBUI_CONFIG_DIR` (oclif scopes that env var by bin name) pointed at the
+ * run's throwaway config dir. When `E2E_HOST_CLI=sdkck`, the same arguments go
+ * to the installed `sdkck` binary — this plugin's command id (`webui`) is
+ * host-agnostic, so the argv needs no rewrite — and oclif's bin-scoped
+ * `SDKCK_*` dirs are redirected into the throwaway sdkck home
+ * (`E2E_SDKCK_HOME`) that scripts/e2e.sh installed this build into.
  *
- * @returns Absolute path to the config dir, to be passed to startWebUi().
+ * playwright.config.ts hands the result to its webServer; startWebUi() spawns
+ * the same command for suites that need a fresh server mid-run.
+ *
+ * @param port The port to serve on, from claimFreePort().
+ * @param configDir Value for WEBUI_CONFIG_DIR / SDKCK_CONFIG_DIR.
+ * @returns The shell command (relative to the repo root, the webServer's and
+ *   the config's working directory) and env overrides to layer over
+ *   process.env.
  */
-export async function createConfigDir(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), 'webui-e2e-'))
-}
+export function webUiServerCommand(port: number, configDir: string): {command: string; env: Record<string, string>} {
+  const base = {FORCE_COLOR: '0', NO_COLOR: '1'}
 
-/**
- * Removes a config dir written by createConfigDir().
- *
- * @param dir The directory to remove, if the suite got as far as creating one
- *   — an `after` hook also runs when its `before` skipped the suite.
- */
-export async function removeConfigDir(dir?: string): Promise<void> {
-  if (!dir) return
-  await fs.rm(dir, {force: true, recursive: true})
-}
+  if (isSdkckLeg()) {
+    const home = process.env.E2E_SDKCK_HOME
+    if (!home) {
+      throw new Error('E2E_HOST_CLI=sdkck requires E2E_SDKCK_HOME — set by scripts/e2e.sh or the CI workflow')
+    }
 
-let hasCleanedScreenshots = false
+    if (!existsSync(SDKCK)) {
+      throw new Error(`sdkck CLI not found at ${SDKCK} — install it first: npm install --no-save sdkck`)
+    }
 
-/**
- * The directory this leg's screenshots are written to, created on demand.
- *
- * Screenshots are run artifacts (gitignored): each executed browser test
- * captures its resulting page state, filed under a per-leg subdirectory so
- * the two legs' identically named tests never overwrite each other. The
- * first capture of a mocha process empties the directory first, so a run's
- * screenshots describe exactly that run.
- *
- * @returns Absolute path to the leg's screenshot directory.
- */
-export async function screenshotDir(): Promise<string> {
-  const dir = path.join(REPO_ROOT, 'test', 'e2e', 'screenshots', isSdkckLeg() ? 'sdkck' : 'standalone')
-
-  if (!hasCleanedScreenshots) {
-    hasCleanedScreenshots = true
-    await fs.rm(dir, {force: true, recursive: true})
+    return {
+      command: `node_modules/.bin/sdkck webui --host 127.0.0.1 --port ${port}`,
+      env: {
+        ...base,
+        SDKCK_CACHE_DIR: path.join(home, 'cache'),
+        SDKCK_CONFIG_DIR: configDir,
+        SDKCK_DATA_DIR: path.join(home, 'data'),
+      },
+    }
   }
 
-  await fs.mkdir(dir, {recursive: true})
-  return dir
+  return {
+    command: `node bin/run.js webui --host 127.0.0.1 --port ${port}`,
+    env: {...base, WEBUI_CONFIG_DIR: configDir},
+  }
 }
 
 /**
@@ -222,26 +236,28 @@ function signalTree(proc: ChildProcess, signal: NodeJS.Signals): void {
 }
 
 /**
- * Starts the web UI server as a real subprocess of the configured host CLI
- * (see hostInvocation()) and waits for its ready line.
+ * Starts a web UI server as a real subprocess of the configured host CLI (see
+ * webUiServerCommand()) and waits for its ready line.
  *
- * The `webui` command keeps the event loop alive forever, so the child is
- * expected to outlive this call; stopWebUi() must be called in the suite's
- * `after` hook. A child that exits — or stays silent — before announcing
- * `Web UI ready at <url>` rejects with the captured output.
+ * Used by suites that need a server with a command cache built *after* the
+ * run's shared server started (the plugins suite's dynamically registered spec
+ * commands); playwright.config.ts's webServer manages the shared one. A child
+ * that exits — or stays silent — before announcing `Web UI ready at <url>`
+ * rejects with the captured output.
  *
  * @param configDir Value for WEBUI_CONFIG_DIR / SDKCK_CONFIG_DIR, from
- *   createConfigDir().
- * @returns The running server: its bin name, child process and base URL.
+ *   sharedConfigDir().
+ * @returns The running server: its child process and base URL.
  */
 export async function startWebUi(configDir: string): Promise<WebUiServer> {
-  const port = await freePort()
-  const {argv, bin, command, env} = hostInvocation(['webui', '--host', '127.0.0.1', '--port', String(port)], configDir)
+  const port = await claimFreePort()
+  const {command, env} = webUiServerCommand(port, configDir)
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, argv, {
+    const proc = spawn(command, {
       detached: true,
-      env: {...process.env, FORCE_COLOR: '0', NO_COLOR: '1', ...env},
+      env: {...process.env, ...env},
+      shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -260,17 +276,17 @@ export async function startWebUi(configDir: string): Promise<WebUiServer> {
       reject(new Error(message))
     }
 
-    proc.stdout.on('data', (chunk: Buffer) => {
+    proc.stdout!.on('data', (chunk: Buffer) => {
       output += chunk.toString('utf8')
       const ready = /Web UI ready at (\S+)/.exec(output)
       if (ready && !isSettled) {
         isSettled = true
         clearTimeout(timer)
-        resolve({bin, proc, url: ready[1]})
+        resolve({proc, url: ready[1]})
       }
     })
 
-    proc.stderr.on('data', (chunk: Buffer) => {
+    proc.stderr!.on('data', (chunk: Buffer) => {
       output += chunk.toString('utf8')
     })
 
@@ -284,8 +300,7 @@ export async function startWebUi(configDir: string): Promise<WebUiServer> {
  * Stops a server started by startWebUi(): SIGTERM to the process group first,
  * escalating to SIGKILL after 5 s if it will not exit.
  *
- * @param server The server to stop, if the suite got as far as starting one
- *   — an `after` hook also runs when its `before` skipped the suite.
+ * @param server The server to stop, if the suite got as far as starting one.
  */
 export async function stopWebUi(server?: WebUiServer): Promise<void> {
   if (!server) return
@@ -305,74 +320,16 @@ export async function stopWebUi(server?: WebUiServer): Promise<void> {
 }
 
 /**
- * Launches a fresh headless Chromium for one suite.
+ * Performs a JSON request against the given server's API.
  *
- * Each suite owns its browser so no cookies, localStorage or service-worker
- * state survives a suite boundary.
- *
- * @returns The launched browser, to be closed by the suite's `after` hook.
- */
-export async function launchBrowser(): Promise<Browser> {
-  return chromium.launch()
-}
-
-/**
- * Performs a JSON request against the running server's API.
- *
- * @param server The server to talk to.
+ * @param base The server's base URL, e.g. sharedBaseUrl().
  * @param pathname The API path, e.g. '/api/health'.
  * @param init Optional fetch options (method, body, headers).
  * @returns The HTTP status and the parsed JSON body.
  */
-export async function fetchJson<T>(
-  server: WebUiServer,
-  pathname: string,
-  init?: RequestInit,
-): Promise<JsonResponse<T>> {
-  const response = await fetch(new URL(pathname, server.url), init)
+export async function fetchJson<T>(base: string, pathname: string, init?: RequestInit): Promise<JsonResponse<T>> {
+  const response = await fetch(new URL(pathname, base), init)
   return {body: (await response.json()) as T, status: response.status}
-}
-
-/**
- * The payload `/api/run` answers with: what the executor captured from the
- * command's stdout/stderr, whether it succeeded, and how long it took.
- */
-export type RunResult = {
-  durationMs: number
-  error?: string
-  output: string
-  success: boolean
-}
-
-/**
- * Runs a command through `POST /api/run` and returns the executor's result.
- *
- * @param server The server to talk to.
- * @param id The command id, e.g. 'synonyms export'.
- * @param argv Arguments to pass to the command.
- * @returns The HTTP status and the run result payload.
- */
-export async function runViaApi(
-  server: WebUiServer,
-  id: string,
-  argv: string[] = [],
-): Promise<JsonResponse<RunResult>> {
-  return fetchJson(server, '/api/run', {
-    body: JSON.stringify({argv, id}),
-    headers: {'content-type': 'application/json'},
-    method: 'POST',
-  })
-}
-
-/**
- * Asserts a request succeeded, printing the response body on failure —
- * mirroring runCliOk() in API-shaped suites.
- *
- * @param label What the caller was doing, for the failure message.
- * @param result The status/body pair to check.
- */
-export function expectOk<T>(label: string, result: JsonResponse<T>): void {
-  expect(result.status, `${label} failed:\n${JSON.stringify(result.body, null, 2)}`).to.equal(200)
 }
 
 export type CliResult = {
@@ -384,12 +341,12 @@ export type CliResult = {
  * Runs the installed sdkck host CLI as a real subprocess against the
  * throwaway home — the sdkck-leg sibling of the search suite's runCli().
  *
- * Used to seed auth profiles into the throwaway config dir before the browser
- * tests execute commands in the host's process: `auth add` validates the
- * credentials on save, so a bad seed fails here rather than in a UI run.
+ * Used to seed auth profiles and import specs into the run's config dir: the
+ * CLI validates credentials on save, so a bad seed fails here rather than in a
+ * UI run.
  *
  * @param args Command line arguments, e.g. ['jira', 'auth', 'add', '--profile', 'default'].
- * @param configDir Value for SDKCK_CONFIG_DIR, from createConfigDir().
+ * @param configDir Value for SDKCK_CONFIG_DIR, from sharedConfigDir().
  * @returns The exit code and captured output (unredacted — redact before printing).
  */
 export async function runHostCli(args: string[], configDir: string): Promise<CliResult> {
@@ -468,25 +425,20 @@ export async function runCommandViaUi(
   return {ok, output: redactSecrets(output)}
 }
 
-let screenshotIndex = 0
+export type SurfaceCommand = {
+  args: Array<{name: string; required: boolean}>
+  flags: Array<{name: string; required: boolean}>
+  id: string
+}
 
 /**
- * Captures a full-page screenshot of the resulting page state, pass or fail,
- * numbered across the whole mocha process so one leg's screenshots sort in
- * execution order. A crashed page cannot be captured; the failure of the
- * capture itself must never mask the test result.
+ * Fetches the served command surface over real HTTP.
  *
- * @param page The browser page to capture.
- * @param state The mocha test state ('passed' or 'failed').
- * @param title The mocha test title, slugified into the filename.
+ * @param base The server's base URL, e.g. sharedBaseUrl() or a fresh server's
+ *   url from startWebUi().
+ * @returns The served commands.
  */
-export async function captureScreenshot(page: Page, state: string, title: string): Promise<void> {
-  screenshotIndex += 1
-  const name = `${String(screenshotIndex).padStart(2, '0')}-${state === 'failed' ? 'FAIL' : 'PASS'}-${title.replaceAll(/[^\w]+/g, '-')}.png`
-
-  try {
-    await page.screenshot({fullPage: true, path: path.join(await screenshotDir(), name)})
-  } catch {
-    // A crashed page cannot be captured.
-  }
+export async function surfaceCommands(base: string): Promise<SurfaceCommand[]> {
+  const {body} = await fetchJson<{commands: SurfaceCommand[]}>(base, '/api/commands')
+  return body.commands
 }

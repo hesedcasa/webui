@@ -20,6 +20,13 @@ const config = [
     files: ['test/**/*.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
+  // playwright.config.ts sits outside every tsconfig (the root one builds only
+  // src/), so the project service cannot resolve its types — lint it without
+  // type-aware rules, like the test files. `tsc` covers it separately.
+  {
+    files: ['playwright.config.ts'],
+    ...tseslint.configs.disableTypeChecked,
+  },
   // Relax overly-strict rules from eslint-config-oclif@7 across the project.
   {
     rules: {

@@ -1,19 +1,16 @@
-import type {Browser, Page} from 'playwright'
-
-import {expect} from 'chai'
+import {expect, test} from '@playwright/test'
 
 import {
-  captureScreenshot,
-  createConfigDir,
-  fetchJson,
   isSdkckLeg,
-  launchBrowser,
   redactSecrets,
-  removeConfigDir,
   runCommandViaUi,
   runHostCli,
+  sharedBaseUrl,
+  sharedConfigDir,
   startWebUi,
   stopWebUi,
+  type SurfaceCommand,
+  surfaceCommands,
   type WebUiServer,
 } from './helpers.js'
 
@@ -29,12 +26,6 @@ const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql'
 const LINEAR_SCHEMA_URL =
   'https://raw.githubusercontent.com/linear/linear/refs/heads/master/packages/sdk/src/schema.graphql'
 const CONTEXT7_SPEC_URL = 'https://raw.githubusercontent.com/upstash/context7/refs/heads/master/docs/openapi.json'
-
-type SurfaceCommand = {
-  args: Array<{name: string; required: boolean}>
-  flags: Array<{name: string; required: boolean}>
-  id: string
-}
 
 /** True when every named environment variable is set (loaded from .env). */
 function hasCreds(names: string[]): boolean {
@@ -53,11 +44,11 @@ function sentryOrg(): string {
 }
 
 /**
- * Seeds one plugin's `default` auth profile into the throwaway config dir via
- * the CLI, which validates the credentials on save — a bad seed fails here,
- * with a redacted message, rather than as a confusing UI failure.
+ * Seeds one plugin's `default` auth profile into the run's config dir via the
+ * CLI, which validates the credentials on save — a bad seed fails here, with a
+ * redacted message, rather than as a confusing UI failure.
  *
- * @param configDir The throwaway config dir, from createConfigDir().
+ * @param configDir The throwaway config dir, from sharedConfigDir().
  * @param plugin The plugin topic, e.g. 'jira'.
  * @param fields Credential fields keyed by the plugin's auth add flag names.
  */
@@ -66,35 +57,30 @@ async function seedAuth(configDir: string, plugin: string, fields: Record<string
   for (const [name, value] of Object.entries(fields)) argv.push(`--${name}`, value)
 
   const result = await runHostCli(argv, configDir)
-  expect(result.code, `seeding ${plugin} auth failed:\n${redactSecrets(result.output)}`).to.equal(0)
+  expect(result.code, `seeding ${plugin} auth failed:\n${redactSecrets(result.output)}`).toBe(0)
 }
 
 /**
- * Imports one API spec into the throwaway config dir through the CLI.
+ * Imports one API spec into the run's config dir through the CLI.
  *
- * @param configDir The throwaway config dir, from createConfigDir().
+ * @param configDir The throwaway config dir, from sharedConfigDir().
  * @param source The spec URL to import.
  * @param flags Extra import flags, e.g. ['--name', 'linear'].
  */
 async function importSpec(configDir: string, source: string, flags: string[]): Promise<void> {
   const result = await runHostCli(['api', 'import', source, ...flags], configDir)
-  expect(result.code, `importing ${source} failed:\n${redactSecrets(result.output)}`).to.equal(0)
+  expect(result.code, `importing ${source} failed:\n${redactSecrets(result.output)}`).toBe(0)
 }
 
 /**
  * Seeds one imported spec's auth profile through the CLI.
  *
- * @param configDir The throwaway config dir, from createConfigDir().
+ * @param configDir The throwaway config dir, from sharedConfigDir().
  * @param argv The full `api auth add …` argv, credentials included.
  */
 async function seedSpecAuth(configDir: string, argv: string[]): Promise<void> {
   const result = await runHostCli(argv, configDir)
-  expect(result.code, `seeding spec auth failed:\n${redactSecrets(result.output)}`).to.equal(0)
-}
-
-async function surface(server: WebUiServer): Promise<SurfaceCommand[]> {
-  const {body} = await fetchJson<{commands: SurfaceCommand[]}>(server, '/api/commands')
-  return body.commands
+  expect(result.code, `seeding spec auth failed:\n${redactSecrets(result.output)}`).toBe(0)
 }
 
 /**
@@ -151,199 +137,193 @@ function paramsFor(
  * read-shaped commands run — the suite executes against real sandboxes and
  * must leave them untouched.
  */
-describe('e2e: executing plugin commands via the web UI', () => {
-  let browser: Browser
-  let configDir: string
-  let page: Page
-  let server: WebUiServer
+test.describe('e2e: executing plugin commands via the web UI', () => {
+  test.skip(!isSdkckLeg(), 'sdkck host leg only')
 
-  before(async function () {
-    if (!isSdkckLeg()) this.skip()
-
-    configDir = await createConfigDir()
-    server = await startWebUi(configDir)
-    browser = await launchBrowser()
-    page = await browser.newPage()
+  test.beforeEach(async ({page}) => {
+    await page.goto('/')
   })
 
-  after(async () => {
-    await browser?.close()
-    await stopWebUi(server)
-    await removeConfigDir(configDir)
-  })
-
-  beforeEach(async () => {
-    await page.goto(server.url)
-  })
-
-  // Screenshot record of every executed UI run — pass or fail.
-  afterEach(async function () {
-    const test = this.currentTest
-    if (!test?.state) return
-    await captureScreenshot(page, test.state, test.title)
-  })
-
-  it('serves the credential-backed plugins on its surface', async () => {
-    const ids = (await surface(server)).map((command) => command.id)
+  test('serves the credential-backed plugins on its surface', async () => {
+    const ids = (await surfaceCommands(sharedBaseUrl())).map((command) => command.id)
     for (const id of ['api:list', 'bb:auth:test', 'conni:auth:test', 'jira:auth:test', 'sentry:auth:test']) {
-      expect(ids, `${id} missing from the served surface`).to.include(id)
+      expect(ids, `${id} missing from the served surface`).toContain(id)
     }
   })
 
-  describe('jira', () => {
-    before(async function () {
-      if (!hasCreds(['ATLASSIAN_API_TOKEN', 'ATLASSIAN_EMAIL', 'ATLASSIAN_URL'])) this.skip()
-      await seedAuth(configDir, 'jira', {
+  test.describe('jira', () => {
+    test.skip(
+      !hasCreds(['ATLASSIAN_API_TOKEN', 'ATLASSIAN_EMAIL', 'ATLASSIAN_URL']),
+      'jira credentials not configured in .env',
+    )
+
+    test.beforeAll(async () => {
+      await seedAuth(sharedConfigDir(), 'jira', {
         apiToken: process.env.ATLASSIAN_API_TOKEN!,
         email: process.env.ATLASSIAN_EMAIL!,
         host: process.env.ATLASSIAN_URL!,
       })
     })
 
-    it('validates the stored profile through the UI', async () => {
+    test('validates the stored profile through the UI', async ({page}) => {
       const result = await runCommandViaUi(page, 'jira:auth:test')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it('lists projects through the UI', async () => {
+    test('lists projects through the UI', async ({page}) => {
       const result = await runCommandViaUi(page, 'jira:project:list')
-      expect(result.ok, result.output).to.be.true
-      expect(result.output, 'a live Jira instance has projects').to.not.equal('')
+      expect(result.ok, result.output).toBe(true)
+      expect(result.output, 'a live Jira instance has projects').not.toBe('')
     })
   })
 
-  describe('conni', () => {
-    before(async function () {
-      if (!hasCreds(['ATLASSIAN_API_TOKEN', 'ATLASSIAN_EMAIL', 'ATLASSIAN_URL'])) this.skip()
-      await seedAuth(configDir, 'conni', {
+  test.describe('conni', () => {
+    test.skip(
+      !hasCreds(['ATLASSIAN_API_TOKEN', 'ATLASSIAN_EMAIL', 'ATLASSIAN_URL']),
+      'conni credentials not configured in .env',
+    )
+
+    test.beforeAll(async () => {
+      await seedAuth(sharedConfigDir(), 'conni', {
         apiToken: process.env.ATLASSIAN_API_TOKEN!,
         email: process.env.ATLASSIAN_EMAIL!,
         host: process.env.ATLASSIAN_URL!,
       })
     })
 
-    it('validates the stored profile through the UI', async () => {
+    test('validates the stored profile through the UI', async ({page}) => {
       const result = await runCommandViaUi(page, 'conni:auth:test')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it('lists spaces through the UI', async () => {
+    test('lists spaces through the UI', async ({page}) => {
       const result = await runCommandViaUi(page, 'conni:space:list')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
   })
 
-  describe('bb', () => {
-    before(async function () {
+  test.describe('bb', () => {
+    test.skip(!hasCreds(['BITBUCKET_API_TOKEN', 'BITBUCKET_EMAIL']), 'bb credentials not configured in .env')
+
+    test.beforeAll(async () => {
       // bb's API root is hardcoded to api.bitbucket.org; the legacy auth
       // schema still carries a host field, so seed it with the real root.
-      if (!hasCreds(['BITBUCKET_API_TOKEN', 'BITBUCKET_EMAIL'])) this.skip()
-      await seedAuth(configDir, 'bb', {
+      await seedAuth(sharedConfigDir(), 'bb', {
         apiToken: process.env.BITBUCKET_API_TOKEN!,
         email: process.env.BITBUCKET_EMAIL!,
         host: 'https://api.bitbucket.org',
       })
     })
 
-    it('validates the stored profile through the UI', async () => {
+    test('validates the stored profile through the UI', async ({page}) => {
       const result = await runCommandViaUi(page, 'bb:auth:test')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it('reads the E2E_WORKSPACE through the UI form', async function () {
+    test('reads the E2E_WORKSPACE through the UI form', async ({page}) => {
       const workspace = process.env.E2E_WORKSPACE
-      if (!workspace) this.skip()
+      test.skip(!workspace, 'E2E_WORKSPACE not configured in .env')
 
       // Fill the argument input the way the UI renders it: its id is
       // `arg-<name>` from the served metadata, not a guess.
-      const commands = await surface(server)
+      const commands = await surfaceCommands(sharedBaseUrl())
       const meta = commands.find((command) => command.id === 'bb:workspace')
       const argName = meta?.args[0]?.name
-      expect(argName, 'bb:workspace exposes no argument').to.exist
+      expect(argName, 'bb:workspace exposes no argument').toBeTruthy()
 
-      const result = await runCommandViaUi(page, 'bb:workspace', {[argName!]: workspace})
-      expect(result.ok, result.output).to.be.true
-      expect(result.output).to.contain(workspace)
+      const result = await runCommandViaUi(page, 'bb:workspace', {[argName!]: workspace!})
+      expect(result.ok, result.output).toBe(true)
+      expect(result.output).toContain(workspace)
     })
   })
 
-  describe('sentry', () => {
-    before(async function () {
-      if (!hasCreds(['SENTRY_API_KEY'])) this.skip()
+  test.describe('sentry', () => {
+    test.skip(!hasCreds(['SENTRY_API_KEY']), 'sentry credentials not configured in .env')
+
+    test.beforeAll(async () => {
       // The API root is the instance URL with /api/0 appended when missing.
       const raw = process.env.SENTRY_URL ?? 'https://sentry.io'
       const host = raw.endsWith('/api/0') ? raw : `${raw.replace(/\/+$/, '')}/api/0`
-      await seedAuth(configDir, 'sentry', {
+      await seedAuth(sharedConfigDir(), 'sentry', {
         authToken: process.env.SENTRY_API_KEY!,
         host,
         organization: sentryOrg(),
       })
     })
 
-    it('validates the stored profile through the UI', async () => {
+    test('validates the stored profile through the UI', async ({page}) => {
       const result = await runCommandViaUi(page, 'sentry:auth:test')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it("lists the organization's issues through the UI", async () => {
+    test("lists the organization's issues through the UI", async ({page}) => {
       // sentry:org reads the profile's organization — a real read through the
       // UI without needing a project slug.
       const result = await runCommandViaUi(page, 'sentry:org')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
   })
 
-  describe('trello', () => {
-    before(async function () {
-      // trello is not JIT-installed by the host; scripts/e2e.sh installs it
-      // only when its credentials exist. Without that install the surface has
-      // no trello commands — skip rather than fail.
-      if (!hasCreds(['TRELLO_API_KEY', 'TRELLO_SECRET'])) this.skip()
+  test.describe('trello', () => {
+    test.skip(!hasCreds(['TRELLO_API_KEY', 'TRELLO_SECRET']), 'trello credentials not configured in .env')
 
-      const ids = (await surface(server)).map((command) => command.id)
-      if (ids.every((id) => !id.startsWith('trello:'))) this.skip()
+    // trello is not JIT-installed by the host; scripts/e2e.sh installs it only
+    // when its credentials exist. Without that install the surface has no
+    // trello commands — skip rather than fail. The check needs the running
+    // server, so it happens in beforeAll and the tests guard on the result.
+    let isSurfaceHasTrello = false
 
-      await seedAuth(configDir, 'trello', {
+    test.beforeAll(async () => {
+      const ids = (await surfaceCommands(sharedBaseUrl())).map((command) => command.id)
+      isSurfaceHasTrello = ids.some((id) => id.startsWith('trello:'))
+      if (!isSurfaceHasTrello) return
+
+      await seedAuth(sharedConfigDir(), 'trello', {
         apiKey: process.env.TRELLO_API_KEY!,
         apiToken: process.env.TRELLO_SECRET!,
       })
     })
 
-    it('validates the stored profile through the UI', async () => {
+    test('validates the stored profile through the UI', async ({page}) => {
+      test.skip(!isSurfaceHasTrello, 'trello not installed on this host')
       const result = await runCommandViaUi(page, 'trello:auth:test')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it('lists boards through the UI', async () => {
-      const commands = await surface(server)
-      const boardList = commands.find((command) => command.id === 'trello:board:list')
-      expect(boardList, 'trello:board:list missing from the served surface').to.exist
+    test('lists boards through the UI', async ({page}) => {
+      test.skip(!isSurfaceHasTrello, 'trello not installed on this host')
+
+      const commands = await surfaceCommands(sharedBaseUrl())
+      expect(
+        commands.some((command) => command.id === 'trello:board:list'),
+        'trello:board:list missing from the served surface',
+      ).toBe(true)
 
       const result = await runCommandViaUi(page, 'trello:board:list')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
   })
 
-  describe('api', () => {
+  test.describe('api', () => {
     // Imports only register operations in the throwaway config dir — no
     // external state. The credential-free smoke keeps the UI import flow
     // covered everywhere; the live calls below skip without their API keys.
-    it('lists imported specs (none on a fresh config dir)', async () => {
+    test('lists imported specs (none on a fresh config dir)', async ({page}) => {
       const result = await runCommandViaUi(page, 'api:list')
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it('imports a public spec through the UI form', async () => {
+    test('imports a public spec through the UI form', async ({page}) => {
       // The name is pinned: an omitted --name derives one from the spec, and
       // the live leg's auth seed below addresses the spec by this name.
       const result = await runCommandViaUi(page, 'api:import', {source: VERCEL_SPEC}, {name: 'vercel'})
-      expect(result.ok, result.output).to.be.true
+      expect(result.ok, result.output).toBe(true)
     })
 
-    it('lists the imported spec', async () => {
+    test('lists the imported spec', async ({page}) => {
       const result = await runCommandViaUi(page, 'api:list')
-      expect(result.ok, result.output).to.be.true
-      expect(result.output.toLowerCase()).to.contain('vercel')
+      expect(result.ok, result.output).toBe(true)
+      expect(result.output.toLowerCase()).toContain('vercel')
     })
 
     // The live api leg, mirroring the sdkck host suite's: import the Linear
@@ -351,13 +331,20 @@ describe('e2e: executing plugin commands via the web UI', () => {
     // the smoke imported, seed each spec's auth profile through the CLI (the
     // tokens must never pass through a browser form — screenshots would
     // capture them), then call one real operation per API through the UI.
-    describe('live calls for every imported api', () => {
-      before(async function () {
+    test.describe('live calls for every imported api', () => {
+      test.skip(
+        !hasCreds(['LINEAR_API_KEY', 'VERCEL_API_KEY', 'CONTEXT7_API_KEY']),
+        'api credentials not configured in .env',
+      )
+
+      let live: undefined | WebUiServer
+
+      test.beforeAll(async () => {
         // The Linear GraphQL SDL alone is several MB and every import
         // converts its spec, so the hook gets a generous timeout.
-        this.timeout(600_000)
-        if (!hasCreds(['LINEAR_API_KEY', 'VERCEL_API_KEY', 'CONTEXT7_API_KEY'])) this.skip()
+        test.setTimeout(600_000)
 
+        const configDir = sharedConfigDir()
         await importSpec(configDir, LINEAR_SCHEMA_URL, ['--name', 'linear', '--base-url', LINEAR_GRAPHQL_URL])
         await importSpec(configDir, CONTEXT7_SPEC_URL, ['--name', 'context7'])
 
@@ -394,38 +381,52 @@ describe('e2e: executing plugin commands via the web UI', () => {
           process.env.CONTEXT7_API_KEY!,
         ])
 
-        // Dynamically registered spec commands (e.g. `linear viewer`) join
-        // the surface at host startup, so the server restarts against the
-        // completed config dir before the UI runs.
-        await stopWebUi(server)
-        server = await startWebUi(configDir)
+        // Dynamically registered spec commands (e.g. `linear viewer`) join the
+        // surface only at server startup — the run's shared server built its
+        // command cache before these imports — so the live runs execute
+        // against a fresh server instance over the same config dir.
+        live = await startWebUi(configDir)
       })
 
-      it('lists all three imported specs through the UI', async () => {
+      test.afterAll(async () => {
+        await stopWebUi(live)
+      })
+
+      test('lists all three imported specs through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
         const result = await runCommandViaUi(page, 'api:list')
-        expect(result.ok, result.output).to.be.true
-        expect(result.output).to.contain('linear')
-        expect(result.output).to.contain('vercel')
-        expect(result.output).to.contain('context7')
+        expect(result.ok, result.output).toBe(true)
+        expect(result.output).toContain('linear')
+        expect(result.output).toContain('vercel')
+        expect(result.output).toContain('context7')
       })
 
-      it('calls the linear viewer operation through the UI', async () => {
+      test('calls the linear viewer operation through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
         const result = await runCommandViaUi(page, 'api:call', {name: 'linear', operationId: 'viewer'})
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
-        const payload = parseCallOutput(result.output) as {data: {viewer: {id: string}}}
-        expect(payload.data.viewer.id).to.be.a('string').with.lengthOf.at.least(8)
+        const payload = parseCallOutput<{data: {viewer: {id: string}}}>(result.output)
+        expect(payload.data.viewer.id).toBeTruthy()
+        expect(payload.data.viewer.id.length).toBeGreaterThanOrEqual(8)
       })
 
-      it('calls the vercel getAuthUser operation through the UI', async () => {
+      test('calls the vercel getAuthUser operation through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
         const result = await runCommandViaUi(page, 'api:call', {name: 'vercel', operationId: 'getAuthUser'})
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
-        const payload = parseCallOutput(result.output) as {user: {username: string}}
-        expect(payload.user.username).to.be.a('string').with.lengthOf.at.least(1)
+        const payload = parseCallOutput<{user: {username: string}}>(result.output)
+        expect(payload.user.username).toBeTruthy()
+        expect(payload.user.username.length).toBeGreaterThanOrEqual(1)
       })
 
-      it('calls the context7 searchLibraries operation through the UI', async () => {
+      test('calls the context7 searchLibraries operation through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
         // Required query params ride the repeatable --param flag; the form
         // splits the comma-separated input into repeats.
         const result = await runCommandViaUi(
@@ -434,63 +435,73 @@ describe('e2e: executing plugin commands via the web UI', () => {
           {name: 'context7', operationId: 'searchLibraries'},
           {param: 'libraryName=react,query=hooks'},
         )
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
-        const payload = parseCallOutput(result.output) as {results: Array<{id: string}>}
-        expect(payload.results).to.be.an('array').with.lengthOf.at.least(1)
+        const payload = parseCallOutput<{results: Array<{id: string}>}>(result.output)
+        expect(payload.results.length).toBeGreaterThanOrEqual(1)
       })
 
-      it('calls the linear viewer operation directly through the UI', async () => {
+      test('calls the linear viewer operation directly through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
         // Dynamic operations register as `<specName>:<operationId>`; running
         // one directly must reach the same operation as api:call.
-        const ids = (await surface(server)).map((command) => command.id)
-        expect(ids, `linear ids: ${JSON.stringify(ids.filter((id) => id.startsWith('linear')))}`).to.include(
+        const ids = (await surfaceCommands(live!.url)).map((command) => command.id)
+        expect(ids, `linear ids: ${JSON.stringify(ids.filter((id) => id.startsWith('linear')))}`).toContain(
           'linear:viewer',
         )
 
         const result = await runCommandViaUi(page, 'linear:viewer')
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
-        const payload = parseCallOutput(result.output) as {data: {viewer: {id: string}}}
-        expect(payload.data.viewer.id).to.be.a('string').with.lengthOf.at.least(8)
+        const payload = parseCallOutput<{data: {viewer: {id: string}}}>(result.output)
+        expect(payload.data.viewer.id).toBeTruthy()
+        expect(payload.data.viewer.id.length).toBeGreaterThanOrEqual(8)
       })
 
-      it('calls the vercel getAuthUser operation directly through the UI', async () => {
-        const ids = (await surface(server)).map((command) => command.id)
-        expect(ids, `vercel ids: ${JSON.stringify(ids.filter((id) => id.startsWith('vercel')))}`).to.include(
+      test('calls the vercel getAuthUser operation directly through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
+        const ids = (await surfaceCommands(live!.url)).map((command) => command.id)
+        expect(ids, `vercel ids: ${JSON.stringify(ids.filter((id) => id.startsWith('vercel')))}`).toContain(
           'vercel:getAuthUser',
         )
 
         const result = await runCommandViaUi(page, 'vercel:getAuthUser')
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
-        const payload = parseCallOutput(result.output) as {user: {username: string}}
-        expect(payload.user.username).to.be.a('string').with.lengthOf.at.least(1)
+        const payload = parseCallOutput<{user: {username: string}}>(result.output)
+        expect(payload.user.username).toBeTruthy()
+        expect(payload.user.username.length).toBeGreaterThanOrEqual(1)
       })
 
-      it('calls the context7 searchLibraries operation directly through the UI', async () => {
-        const commands = await surface(server)
+      test('calls the context7 searchLibraries operation directly through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
+        const commands = await surfaceCommands(live!.url)
         const meta = commands.find((command) => command.id === 'context7:searchLibraries')
-        expect(meta, 'context7:searchLibraries missing from the served surface').to.exist
+        expect(meta, 'context7:searchLibraries missing from the served surface').toBeTruthy()
 
         // Required URL/body parameters become args in the dynamic form and
         // optional ones become flags — fill whichever the served metadata
         // carries each parameter in.
         const {args, flags} = paramsFor(meta!, {libraryname: 'react', query: 'hooks'})
         const result = await runCommandViaUi(page, 'context7:searchLibraries', args, flags)
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
-        const payload = parseCallOutput(result.output) as {results: Array<{id: string}>}
-        expect(payload.results).to.be.an('array').with.lengthOf.at.least(1)
+        const payload = parseCallOutput<{results: Array<{id: string}>}>(result.output)
+        expect(payload.results.length).toBeGreaterThanOrEqual(1)
       })
 
-      it('removes an imported spec through the UI', async () => {
+      test('removes an imported spec through the UI', async ({page}) => {
+        await page.goto(live!.url)
+
         const result = await runCommandViaUi(page, 'api:remove', {name: 'context7'})
-        expect(result.ok, result.output).to.be.true
+        expect(result.ok, result.output).toBe(true)
 
         const list = await runCommandViaUi(page, 'api:list')
-        expect(list.ok, list.output).to.be.true
-        expect(list.output).to.not.contain('context7')
+        expect(list.ok, list.output).toBe(true)
+        expect(list.output).not.toContain('context7')
       })
     })
   })
