@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.13](https://github.com/hesedcasa/webui/compare/v0.2.12...v0.2.13) (2026-09-21)
+
+
+### 📄 Documentation
+
+* drop the nightly-schedule reference for the sdkck e2e suite ([#49](https://github.com/hesedcasa/webui/issues/49)) ([ff864c1](https://github.com/hesedcasa/webui/commit/ff864c14944bd2ec15ff30109232a9e827d42853))
+
 ## [0.2.12](https://github.com/hesedcasa/webui/compare/v0.2.11...v0.2.12) (2026-08-12)
 
 
