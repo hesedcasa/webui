@@ -2,15 +2,10 @@ name: Run end-to-end tests
 
 permissions: read-all
 
-# No secrets and no external services: the web UI suite only runs local,
-# read-only commands against a throwaway config dir, and installing the
-# plugin only drops a tarball into a throwaway home — so this runs per push
-# and pull request.
+# On demand only. The suite needs no secrets and no external services — it
+# only runs local, read-only commands against a throwaway config dir — but it
+# is triggered manually rather than on every push and pull request.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
   workflow_dispatch:
 
 concurrency:
