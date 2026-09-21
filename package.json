@@ -33,7 +33,7 @@
     "eslint-config-prettier": "^10",
     "esmock": "^2.7.3",
     "mocha": "^11",
-    "oclif": "^4",
+    "oclif": "^6",
     "prettier": "^3.8.1",
     "shx": "^0.4.0",
     "sinon": "^22.0.0",
