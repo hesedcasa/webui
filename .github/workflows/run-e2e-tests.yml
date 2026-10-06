@@ -20,9 +20,11 @@ permissions:
 on:
   workflow_dispatch:
 
+# Scoped to the ref: a dispatch from another branch skips every job, and in a
+# shared group it would still replace a pending default-branch run.
 concurrency:
   group: webui-e2e-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # Everything that installs or builds runs here, with no OIDC permission: a
