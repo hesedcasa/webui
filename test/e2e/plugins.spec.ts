@@ -25,9 +25,9 @@ const VERCEL_SPEC = 'https://openapi.vercel.sh/'
 const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql'
 const LINEAR_SCHEMA_URL =
   'https://raw.githubusercontent.com/linear/linear/refs/heads/master/packages/sdk/src/schema.graphql'
-const CONTEXT7_SPEC_URL = 'https://raw.githubusercontent.com/upstash/context7/refs/heads/master/docs/openapi.json'
+const CONTEXT7_SPEC_URL = 'https://context7.com/openapi.json'
 
-/** True when every named environment variable is set (loaded from .env). */
+/** True when every named environment variable is set (fetched from Infisical). */
 function hasCreds(names: string[]): boolean {
   return names.every((name) => process.env[name])
 }
@@ -35,7 +35,7 @@ function hasCreds(names: string[]): boolean {
 /**
  * The Sentry organization slug the connection test hits.
  *
- * .env carries no org slug; the instance subdomain is the best derivation,
+ * Infisical carries no org slug; the instance subdomain is the best derivation,
  * overridable with SENTRY_ORG.
  */
 function sentryOrg(): string {
@@ -128,7 +128,7 @@ function paramsFor(
 
 /**
  * Executes live, read-only commands through the web UI for every plugin the
- * local `.env` carries credentials for — the browser form is the only driver:
+ * environment carries credentials for — the browser form is the only driver:
  * each run is a real click on Run against the host's installed plugins.
  *
  * Everything here is guarded to degrade gracefully: plugins whose credentials
@@ -154,7 +154,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
   test.describe('jira', () => {
     test.skip(
       !hasCreds(['ATLASSIAN_API_TOKEN', 'ATLASSIAN_EMAIL', 'ATLASSIAN_URL']),
-      'jira credentials not configured in .env',
+      'jira credentials not configured in Infisical',
     )
 
     test.beforeAll(async () => {
@@ -180,7 +180,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
   test.describe('conni', () => {
     test.skip(
       !hasCreds(['ATLASSIAN_API_TOKEN', 'ATLASSIAN_EMAIL', 'ATLASSIAN_URL']),
-      'conni credentials not configured in .env',
+      'conni credentials not configured in Infisical',
     )
 
     test.beforeAll(async () => {
@@ -203,7 +203,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
   })
 
   test.describe('bb', () => {
-    test.skip(!hasCreds(['BITBUCKET_API_TOKEN', 'BITBUCKET_EMAIL']), 'bb credentials not configured in .env')
+    test.skip(!hasCreds(['BITBUCKET_API_TOKEN', 'BITBUCKET_EMAIL']), 'bb credentials not configured in Infisical')
 
     test.beforeAll(async () => {
       // bb's API root is hardcoded to api.bitbucket.org; the legacy auth
@@ -222,7 +222,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
 
     test('reads the E2E_WORKSPACE through the UI form', async ({page}) => {
       const workspace = process.env.E2E_WORKSPACE
-      test.skip(!workspace, 'E2E_WORKSPACE not configured in .env')
+      test.skip(!workspace, 'E2E_WORKSPACE not configured in Infisical')
 
       // Fill the argument input the way the UI renders it: its id is
       // `arg-<name>` from the served metadata, not a guess.
@@ -238,7 +238,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
   })
 
   test.describe('sentry', () => {
-    test.skip(!hasCreds(['SENTRY_API_KEY']), 'sentry credentials not configured in .env')
+    test.skip(!hasCreds(['SENTRY_API_KEY']), 'sentry credentials not configured in Infisical')
 
     test.beforeAll(async () => {
       // The API root is the instance URL with /api/0 appended when missing.
@@ -265,7 +265,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
   })
 
   test.describe('trello', () => {
-    test.skip(!hasCreds(['TRELLO_API_KEY', 'TRELLO_SECRET']), 'trello credentials not configured in .env')
+    test.skip(!hasCreds(['TRELLO_API_KEY', 'TRELLO_SECRET']), 'trello credentials not configured in Infisical')
 
     // trello is not JIT-installed by the host; scripts/e2e.sh installs it only
     // when its credentials exist. Without that install the surface has no
@@ -334,7 +334,7 @@ test.describe('e2e: executing plugin commands via the web UI', () => {
     test.describe('live calls for every imported api', () => {
       test.skip(
         !hasCreds(['LINEAR_API_KEY', 'VERCEL_API_KEY', 'CONTEXT7_API_KEY']),
-        'api credentials not configured in .env',
+        'api credentials not configured in Infisical',
       )
 
       let live: undefined | WebUiServer

@@ -3,9 +3,9 @@ import {mkdirSync, rmSync} from 'node:fs'
 
 import {claimFreePort, configDirForPort, webUiServerCommand} from './test/e2e/helpers.js'
 
-// Importing helpers loads the gitignored .env into the environment (without
-// overriding variables already set) before the server subprocess is spawned
-// and before any test runs; helpers.ts tracks the loaded values for redaction.
+// The sandbox credentials arrive through the environment (scripts/e2e.sh runs
+// under `infisical run`), so the server subprocess and the tests both inherit
+// them; helpers.ts tracks their values for redaction.
 
 // Playwright workers re-evaluate this file, but only the main process starts
 // the webServer — skip the port claim and config-dir prep in workers.

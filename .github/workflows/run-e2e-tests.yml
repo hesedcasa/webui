@@ -1,10 +1,22 @@
 name: Run end-to-end tests
 
-permissions: read-all
+permissions:
+  contents: read
 
-# On demand only. The suite needs no secrets and no external services — it
-# only runs local, read-only commands against a throwaway config dir — but it
-# is triggered manually rather than on every push and pull request.
+# Two legs per run: the standalone CLI, then the same suite through the latest
+# sdkck host CLI with this build packed (exercising `prepack`) and installed
+# as its `@hesed/webui` plugin. The core UI tests need no secrets; the plugin
+# UI-leg executes live read-only commands against the shared sandboxes (jira,
+# conni, bb, sentry, trello, api).
+#
+# On demand from the default branch only: fork PRs cannot get the OIDC token
+# they need for the sandbox credentials, and the default-branch gate keeps a
+# manual dispatch of an untrusted ref from running repository code with them.
+#
+# The sandbox credentials come from the Infisical project in .infisical.json
+# (`dev` environment), fetched over GitHub OIDC. Blocked until the repository
+# variables INFISICAL_IDENTITY_ID and INFISICAL_PROJECT_SLUG are set and the
+# machine identity's OIDC auth allows this repo.
 on:
   workflow_dispatch:
 
@@ -13,16 +25,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  run-e2e-tests:
-    name: End-to-end tests (standalone CLI + sdkck host)
+  # Everything that installs or builds runs here, with no OIDC permission: a
+  # compromised `npm ci`, sdkck or plugin-install lifecycle script can neither
+  # read the sandbox credentials nor request a token to fetch them itself.
+  build:
+    name: Build the CLI and install the sdkck host
+    # The test job needs this one, so it is skipped with it.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-    # Two legs (standalone CLI, then the same suite via sdkck); the sdkck leg
-    # additionally packs and installs this build into a throwaway sdkck home.
-    timeout-minutes: 30
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
+      # Outside the workspace and the default ~/.cache, so the browser travels
+      # in the tarball with the rest of the build outputs. Through $GITHUB_ENV
+      # because the runner context is unavailable in a job-level env.
+      - name: Point Playwright at a temp browser dir
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright" >> "$GITHUB_ENV"
+
       - name: Check out repository
-        # Pinned to a full commit SHA: a mutable major tag could be repointed
-        # to different code, which would run before anything here is reviewed.
+        # Pinned to a full commit SHA: these actions run before repository
+        # code gets the credentials, so a moved mutable tag could swap what
+        # executes.
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 2
@@ -39,46 +63,113 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install the Playwright Chromium browser
-        run: npx playwright install --with-deps chromium
-
-      - name: Build the CLI and the web app
-        run: |
-          npm run build
-          npm run build:web
-          # `next build` leaves static assets out of the standalone output;
-          # prepack copies them in before packing, and the standalone server
-          # needs them to hydrate the page.
-          npx shx cp -r web/.next/static web/.next/standalone/web/.next/static
-
-      - name: Run end-to-end tests through the standalone CLI
-        run: npm run test:e2e
-
-      # Second leg: the same suite through the latest sdkck host CLI with this
-      # build packed (exercising `prepack`) and installed as its
-      # `@hesed/webui` plugin — covering the packed artifacts and plugin
-      # dispatch under a host. This build is installed before any sdkck
-      # command runs (a fresh sdkck would otherwise auto-install released
-      # plugins over the build under test). The throwaway sdkck home
-      # (mktemp -d) keeps the install, its dependencies, config and caches off
-      # the runner's real sdkck setup; the test side finds it via
-      # E2E_SDKCK_HOME.
-      - name: Install the latest sdkck and this build
-        run: |
-          npm install --no-save sdkck
-          home="$(mktemp -d)"
-          echo "E2E_SDKCK_HOME=$home" >> "$GITHUB_ENV"
-          # A `file:` URL is required: sdkck resolves any bare path containing
-          # a slash as a GitHub org/repo. Packing into the throwaway home
-          # keeps the tarball out of the workspace.
-          tgz="$(npm pack --pack-destination "$home" | tail -n 1)"
-          SDKCK_CACHE_DIR="$home/cache" \
-          SDKCK_CONFIG_DIR="$home/config" \
-          SDKCK_DATA_DIR="$home/data" \
-            ./node_modules/.bin/sdkck plugins install "file:$home/$tgz"
-
-      - name: Run end-to-end tests via sdkck
-        run: npm run test:e2e
+      # Installs Chromium, builds the CLI and the web app, installs the latest
+      # sdkck, then packs this build and installs it plus the plugins the
+      # UI-leg executes into the sdkck home the test job reuses — the install
+      # half of `npm run test:e2e:all`.
+      - name: Build and install sdkck and the plugins
+        run: npm run test:e2e:all -- --setup-only
         env:
-          E2E_HOST_CLI: sdkck
-          E2E_SDKCK_HOME: ${{ env.E2E_SDKCK_HOME }}
+          E2E_SDKCK_HOME: ${{ runner.temp }}/sdkck-home
+
+      # Only the build outputs travel: the job that holds the credentials
+      # checks out the repository itself, so a lifecycle script that edits or
+      # adds a source, test or script file here cannot get it run there.
+      # node_modules, the browser and the installed plugins are still installed
+      # code — the tests cannot run without them — so this narrows, not
+      # removes, that trust. A tarball rather than the artifact's own zip,
+      # which drops executable bits and node_modules/.bin symlinks. Absolute
+      # paths are kept because the plugin install records them, and hosted
+      # runners share one layout. Next's build cache is left behind.
+      - name: Pack the build outputs, browser and sdkck home
+        run: |
+          tar -czf "$RUNNER_TEMP/e2e-workspace.tgz" -C / \
+            --exclude="${GITHUB_WORKSPACE#/}/web/.next/cache" \
+            "${GITHUB_WORKSPACE#/}/node_modules" "${GITHUB_WORKSPACE#/}/dist" \
+            "${GITHUB_WORKSPACE#/}/web/.next" \
+            "${RUNNER_TEMP#/}/sdkck-home" "${RUNNER_TEMP#/}/ms-playwright"
+
+      - name: Upload the workspace
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-workspace
+          path: ${{ runner.temp }}/e2e-workspace.tgz
+          retention-days: 1
+
+  run-e2e-tests:
+    name: End-to-end tests (standalone CLI + sdkck host)
+    needs: build
+    runs-on: ubuntu-latest
+    # Two legs at up to 2 minutes per test, plus setup (checkout, unpack, the
+    # browser's system libraries, the credential fetch).
+    timeout-minutes: 40
+    # id-token lets the Infisical action exchange GitHub's OIDC token for the
+    # sandbox credentials, so no Infisical secret is stored in the repo. Only
+    # this job has it, and nothing in it installs npm packages.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # A fresh checkout of the dispatched commit, not the build job's copy:
+      # see "Pack the build outputs, browser and sdkck home".
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Download the build outputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: e2e-workspace
+          path: ${{ runner.temp }}
+
+      # Extracts only the named members, so nothing else in the archive can
+      # land over the checkout.
+      - name: Unpack the build outputs, browser and sdkck home
+        run: |
+          tar -xzf "$RUNNER_TEMP/e2e-workspace.tgz" -C / \
+            "${GITHUB_WORKSPACE#/}/node_modules" "${GITHUB_WORKSPACE#/}/dist" \
+            "${GITHUB_WORKSPACE#/}/web/.next" \
+            "${RUNNER_TEMP#/}/sdkck-home" "${RUNNER_TEMP#/}/ms-playwright"
+          echo "E2E_SDKCK_HOME=$RUNNER_TEMP/sdkck-home" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: '.nvmrc'
+
+      # System libraries only: apt packages from the Ubuntu archive, which
+      # did not survive the job boundary. The browser itself came in the
+      # tarball. Runs before the credential fetch, so it never sees them.
+      - name: Install Chromium's system dependencies
+        run: npx --no-install playwright install-deps chromium
+
+      # The Infisical action exports the sandbox credentials to $GITHUB_ENV,
+      # so every later step sees them; the steps before it never do.
+      - name: Fetch sandbox credentials from Infisical
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: dev
+
+      # Both legs against the build job's outputs. A step-level timeout, so a
+      # hung run still fails with the report upload run; the job-level timeout
+      # stays as the outer backstop.
+      - name: Run end-to-end tests
+        timeout-minutes: 30
+        run: npm run test:e2e:all -- --skip-setup
+        env:
+          # A credential missing here means a broken Infisical setup: fail
+          # rather than skip its tests and leave the run green.
+          E2E_REQUIRE_CREDENTIALS: '1'
+
+      - name: Upload the Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

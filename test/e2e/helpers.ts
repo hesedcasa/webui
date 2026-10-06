@@ -2,7 +2,6 @@ import type {Page} from '@playwright/test'
 
 import {type ChildProcess, execFile, spawn} from 'node:child_process'
 import {existsSync} from 'node:fs'
-import fs from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -15,30 +14,16 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const SDKCK = path.join(REPO_ROOT, 'node_modules', '.bin', 'sdkck')
 
 /**
- * Loads `<repo root>/.env` (gitignored) into the environment, without
- * overriding variables that are already set — the sdkck host suite's
- * convention for keeping secrets out of the repo while letting a local run
- * exercise the credential-backed plugins. Values of secret-looking keys are
- * remembered so redactSecrets() can keep them out of failure messages.
- *
- * playwright.config.ts imports this module before spawning the server, which
- * puts the variables in place for both the server subprocess and the tests.
- * No .env means the credential-backed plugin suite skips itself.
+ * Values of every secret-looking environment variable, remembered so
+ * redactSecrets() can keep them out of failure messages. The sandbox
+ * credentials come from Infisical — scripts/e2e.sh re-runs itself under
+ * `infisical run` (CI fetches them with the Infisical action) — so they are
+ * already in the environment when playwright.config.ts imports this module.
+ * Without them, the credential-backed plugin suite skips itself.
  */
-const loadedSecrets: string[] = []
-
-try {
-  const dotEnv = await fs.readFile(path.join(REPO_ROOT, '.env'), 'utf8')
-  for (const line of dotEnv.split('\n')) {
-    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim())
-    if (!match) continue
-    const [, key, raw] = match
-    process.env[key] ??= raw.replaceAll(/^['"]|['"]$/g, '')
-    if (/TOKEN|SECRET|KEY|PASSWORD/.test(key)) loadedSecrets.push(process.env[key]!)
-  }
-} catch {
-  // No .env at the repo root — nothing to load.
-}
+const loadedSecrets: string[] = Object.entries(process.env)
+  .filter(([key, value]) => /TOKEN|SECRET|KEY|PASSWORD/.test(key) && value)
+  .map(([, value]) => value!)
 
 /**
  * Replaces every loaded secret with *** so failure messages can include
