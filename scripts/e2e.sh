@@ -195,7 +195,14 @@ run_playwright() {
   # Delegates to the `test:e2e` script (playwright test) so both legs share
   # one config. The +expansion guard keeps `set -u` happy with an empty array
   # on bash 3.2.
-  npm run --silent test:e2e -- ${PW_ARGS[@]+"${PW_ARGS[@]}"}
+  # Each leg gets its own HTML report and results directory: both legs always
+  # run, and a shared directory would let the sdkck leg replace the report
+  # (and the traces and screenshots) of a failed standalone leg. CI uploads
+  # playwright-report/, so both reports travel with the run.
+  local leg="$1"
+  shift
+  PLAYWRIGHT_HTML_OUTPUT_DIR="playwright-report/$leg" \
+    npm run --silent test:e2e -- --output "test-results/$leg" ${PW_ARGS[@]+"${PW_ARGS[@]}"}
 }
 
 # Records the first failing leg's status. A later leg failing with a different
@@ -237,7 +244,7 @@ if [ "$SETUP_ONLY" -eq 0 ]; then
   # packed plugin, and vice versa. The `|| record_failure` form keeps `set -e`
   # from aborting so the sdkck leg still executes; the first failure becomes
   # the exit code.
-  run_playwright || record_failure
+  run_playwright standalone || record_failure
 fi
 
 # A throwaway sdkck home keeps the plugin install, its dependencies (the
@@ -304,6 +311,6 @@ if [ "$SETUP_ONLY" -ne 0 ]; then
 fi
 
 echo "==> Leg 2: end-to-end tests through the sdkck host CLI"
-E2E_HOST_CLI=sdkck run_playwright || record_failure
+E2E_HOST_CLI=sdkck run_playwright sdkck || record_failure
 
 exit "$EXIT_STATUS"
