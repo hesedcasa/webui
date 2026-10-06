@@ -26,8 +26,10 @@
 # script re-runs itself under `infisical run`, signed in either by a one-time
 # `infisical login` or, in a headless sandbox, by a machine identity's
 # INFISICAL_UNIVERSAL_AUTH_CLIENT_ID and INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET.
-# Plugins whose credentials are still missing skip, and all failure output is
-# redacted.
+# Plugins whose credentials are still missing skip — unless
+# E2E_REQUIRE_CREDENTIALS is set (CI), which makes it an error — and all
+# failure output is redacted. An Infisical CLI that is not logged in is only
+# a warning, so the core tests still run.
 #
 # The sdkck host leg needs no extra @hesed plugins: sdkck bundles the other
 # plugins as core dependencies, so the installed webui plugin serves a real,
@@ -99,20 +101,32 @@ missing_secrets() {
 # must not have them).
 if [ "$SETUP_ONLY" -eq 0 ] && [ -n "$(missing_secrets)" ] &&
   [ -z "${E2E_VIA_INFISICAL:-}" ] && command -v infisical >/dev/null; then
-  # E2E_VIA_INFISICAL stops a second re-exec when Infisical lacks a secret.
-  # The absolute path matters: $0 may be relative to the directory we left.
   infisical_args=(--silent)
+  infisical_ready=1
   if [ -n "${INFISICAL_UNIVERSAL_AUTH_CLIENT_ID:-}" ]; then
     # The CLI reads the client id and secret from the environment; passing
     # them as flags would put the secret in the process list.
-    INFISICAL_TOKEN="$(infisical login --method=universal-auth --silent --plain)"
-    export INFISICAL_TOKEN
+    if INFISICAL_TOKEN="$(infisical login --method=universal-auth --silent --plain)"; then
+      export INFISICAL_TOKEN
+    else
+      infisical_ready=0
+    fi
   fi
   # A machine identity token ignores .infisical.json, so pass its project ID.
   if [ -n "${INFISICAL_TOKEN:-}" ]; then
     infisical_args+=(--projectId "$(node -p "require('./.infisical.json').workspaceId")")
   fi
-  E2E_VIA_INFISICAL=1 exec infisical run "${infisical_args[@]}" -- "$REPO_ROOT/scripts/e2e.sh" "$@"
+  # Probe before the exec: a failed `infisical run` (not logged in, no
+  # access) would end the whole run, including the core tests that need no
+  # credentials. Without Infisical the run carries on, and the plugin UI-leg
+  # skips what lacks credentials.
+  if [ "$infisical_ready" -eq 1 ] && infisical export "${infisical_args[@]}" >/dev/null 2>&1; then
+    # E2E_VIA_INFISICAL stops a second re-exec when Infisical lacks a
+    # secret. The absolute path matters: $0 may be relative to the directory
+    # we left.
+    E2E_VIA_INFISICAL=1 exec infisical run "${infisical_args[@]}" -- "$REPO_ROOT/scripts/e2e.sh" "$@"
+  fi
+  echo "==> WARNING: could not fetch credentials from Infisical (run \`infisical login\`); continuing without them" >&2
 fi
 
 # The sandbox credentials are all the tests need; keep the Infisical ones out
@@ -120,6 +134,14 @@ fi
 unset INFISICAL_TOKEN INFISICAL_UNIVERSAL_AUTH_CLIENT_ID INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET
 
 if [ "$SETUP_ONLY" -eq 0 ] && [ -n "$(missing_secrets)" ]; then
+  # CI sets E2E_REQUIRE_CREDENTIALS: there a missing credential means a broken
+  # Infisical setup, and skipping its tests would leave the run green without
+  # the live plugin runs.
+  if [ -n "${E2E_REQUIRE_CREDENTIALS:-}" ]; then
+    echo "error: missing credentials (E2E_REQUIRE_CREDENTIALS is set): $(missing_secrets | tr '\n' ' ')" >&2
+    echo "Check they exist in Infisical's dev environment." >&2
+    exit 1
+  fi
   echo "==> WARNING: the plugin UI-leg will skip what needs these missing secrets: $(missing_secrets | tr '\n' ' ')"
   echo "    (check Infisical's dev environment, and that the Infisical CLI is installed and logged in)"
 fi
