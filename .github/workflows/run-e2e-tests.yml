@@ -21,8 +21,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: webui-e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: webui-e2e
+  cancel-in-progress: false
 
 jobs:
   # Everything that installs or builds runs here, with no OIDC permission: a
