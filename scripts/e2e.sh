@@ -162,6 +162,11 @@ WEBUI_README_BAK=""
 
 cleanup() {
   local status=$?
+  # A setup step that aborts under `set -e` after a failed leg would otherwise
+  # replace that leg's status; the first failure is the one to report.
+  if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
+    status=$EXIT_STATUS
+  fi
 
   # npm pack's prepack (`oclif readme`) rewrites the tracked README.md with
   # the current machine's usage string, so it is restored here — an e2e run
@@ -193,6 +198,15 @@ run_playwright() {
   npm run --silent test:e2e -- ${PW_ARGS[@]+"${PW_ARGS[@]}"}
 }
 
+# Records the first failing leg's status. A later leg failing with a different
+# status must not overwrite an earlier failure: the script's contract is to
+# exit with the first failure it saw.
+EXIT_STATUS=0
+record_failure() {
+  local leg_status=$?
+  [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=$leg_status
+}
+
 install_into_home() {
   # A tarball must be passed as a `file:` URL: sdkck resolves any bare path
   # containing a slash as a GitHub org/repo.
@@ -219,7 +233,11 @@ fi
 
 if [ "$SETUP_ONLY" -eq 0 ]; then
   echo "==> Leg 1: end-to-end tests through the standalone CLI"
-  run_playwright
+  # Both legs always run: a standalone-leg failure says nothing about the
+  # packed plugin, and vice versa. The `|| record_failure` form keeps `set -e`
+  # from aborting so the sdkck leg still executes; the first failure becomes
+  # the exit code.
+  run_playwright || record_failure
 fi
 
 # A throwaway sdkck home keeps the plugin install, its dependencies (the
@@ -248,6 +266,10 @@ if [ "$SKIP_SETUP" -eq 0 ]; then
   cp "$REPO_ROOT/README.md" "$WEBUI_README_BAK"
   echo "==> Packing the current build"
   TGZ="$(without_credentials npm pack --pack-destination "$SDKCK_E2E_HOME" | tail -n 1)"
+  # A move, not a copy: once README.md is back, the EXIT trap (kept for a
+  # failed pack) must have nothing left to restore, or it would overwrite
+  # edits made while the legs run.
+  mv "$WEBUI_README_BAK" "$REPO_ROOT/README.md"
 
   echo "==> Installing @hesed/webui (this build) into the throwaway home"
   # Installing this build before any sdkck command runs guarantees the host
@@ -282,4 +304,6 @@ if [ "$SETUP_ONLY" -ne 0 ]; then
 fi
 
 echo "==> Leg 2: end-to-end tests through the sdkck host CLI"
-E2E_HOST_CLI=sdkck run_playwright
+E2E_HOST_CLI=sdkck run_playwright || record_failure
+
+exit "$EXIT_STATUS"
