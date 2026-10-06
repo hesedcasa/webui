@@ -73,12 +73,17 @@ fi
 # only skip their tests, they never fail the run.
 # ---------------------------------------------------------------------------
 
-# Every credential the plugin UI-leg uses. Building, packing and installing
+# The credentials the plugin UI-leg's tests skip without — what an Infisical
+# lookup is for, and what E2E_REQUIRE_CREDENTIALS insists on.
+REQUIRED_CREDENTIALS="ATLASSIAN_URL ATLASSIAN_EMAIL ATLASSIAN_API_TOKEN BITBUCKET_API_TOKEN
+BITBUCKET_EMAIL E2E_WORKSPACE SENTRY_API_KEY TRELLO_API_KEY TRELLO_SECRET
+LINEAR_API_KEY VERCEL_API_KEY CONTEXT7_API_KEY"
+
+# Everything the plugin UI-leg reads, including the optional SENTRY_URL (the
+# sentry tests default to https://sentry.io). Building, packing and installing
 # run repository, dependency and freshly fetched plugin scripts that never
 # need them, so those steps run through without_credentials.
-ALL_CREDENTIALS="ATLASSIAN_URL ATLASSIAN_EMAIL ATLASSIAN_API_TOKEN BITBUCKET_API_TOKEN
-BITBUCKET_EMAIL E2E_WORKSPACE SENTRY_API_KEY SENTRY_URL TRELLO_API_KEY TRELLO_SECRET
-LINEAR_API_KEY VERCEL_API_KEY CONTEXT7_API_KEY"
+ALL_CREDENTIALS="$REQUIRED_CREDENTIALS SENTRY_URL"
 
 without_credentials() {
   local unset_args=()
@@ -90,7 +95,7 @@ without_credentials() {
 
 missing_secrets() {
   local var
-  for var in $ALL_CREDENTIALS; do
+  for var in $REQUIRED_CREDENTIALS; do
     if [ -z "${!var:-}" ]; then
       echo "$var"
     fi
